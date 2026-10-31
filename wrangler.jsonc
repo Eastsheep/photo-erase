@@ -1,0 +1,8 @@
+// Cloudflare Workers 部署設定：只部署 relay/worker.js（API 代理），不含前端
+// name 需與 Cloudflare 後台的 Worker 名稱相同
+{
+  "name": "photo-erase",
+  "main": "relay/worker.js",
+  "compatibility_date": "2025-09-01",
+  "workers_dev": true
+}

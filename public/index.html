@@ -67,7 +67,7 @@
     </div>
     <ul class="features">
       <li><span class="f-ico"><svg><use href="#i-hand"/></svg></span><div><b>手指圈選</b><small>圈選、塗抹、雙指縮放精修</small></div></li>
-      <li><span class="f-ico"><svg><use href="#i-sparkles"/></svg></span><div><b>AI 智慧補圖</b><small>DeepSeek 優化指令，Seedream 生成</small></div></li>
+      <li><span class="f-ico"><svg><use href="#i-sparkles"/></svg></span><div><b>AI 智慧補圖</b><small>DeepSeek 優化指令，fal.ai 生成</small></div></li>
       <li><span class="f-ico"><svg><use href="#i-shield"/></svg></span><div><b>只改你圈的地方</b><small>其他畫面像素完全保留</small></div></li>
     </ul>
   </section>
@@ -145,11 +145,23 @@
     <div class="sheet-head"><h2>設定</h2><button value="cancel" class="icon-btn" aria-label="關閉"><svg><use href="#i-x"/></svg></button></div>
     <p class="status" id="serverStatus"></p>
     <label class="server-only">使用密碼<input id="setPassword" type="password" autocomplete="current-password"></label>
-    <label>Seedream API Key<input id="setArk" type="password" placeholder="火山方舟 / BytePlus 金鑰"></label>
-    <label class="direct-only">Seedream 開通地區
-      <select id="setRegion"><option value="cn">火山方舟（中國區）</option><option value="intl">BytePlus ModelArk（海外）</option></select>
+    <label class="direct-only">生圖服務
+      <select id="setProvider">
+        <option value="fal">fal.ai（推薦）</option>
+        <option value="ark-cn">火山方舟（中國區）</option>
+        <option value="ark-intl">BytePlus ModelArk（海外）</option>
+      </select>
     </label>
-    <label>Seedream 模型 ID<input id="setModel" type="text" placeholder="留空用預設 doubao-seedream-4-0-250828"></label>
+    <label class="fal-only">fal.ai API Key<input id="setFal" type="password" placeholder="在 fal.ai/dashboard/keys 建立"></label>
+    <label class="fal-only">模型
+      <select id="setFalModel">
+        <option value="fal-ai/bytedance/seedream/v4.5/edit">Seedream 4.5 編輯（可配合 DeepSeek 指令）</option>
+        <option value="fal-ai/bytedance/seedream/v4/edit">Seedream 4.0 編輯（較便宜）</option>
+        <option value="fal-ai/bria/eraser">Bria 專業消除（專門移除物件，最精準）</option>
+      </select>
+    </label>
+    <label class="ark-only">Seedream API Key<input id="setArk" type="password" placeholder="火山方舟 / BytePlus 金鑰"></label>
+    <label class="ark-only">Seedream 模型 ID<input id="setModel" type="text" placeholder="留空用預設 doubao-seedream-4-0-250828"></label>
     <label>DeepSeek API Key <em>選填</em><input id="setDeepseek" type="password" placeholder="sk-..."></label>
     <label class="direct-only">代理網址 <em>選填，連線被擋時才需要</em><input id="setRelay" type="url" placeholder="https://xxx.workers.dev"></label>
     <p class="note"><svg><use href="#i-shield"/></svg>金鑰只存在這支手機，不會上傳到 GitHub。</p>

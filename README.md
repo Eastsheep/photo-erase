@@ -18,7 +18,15 @@
 推到 `main` 會自動用 GitHub Actions 部署 `public/`。這是純靜態網站，App 會自動進入「直連模式」：
 API 金鑰只存在你手機的瀏覽器（設定頁填入），由網頁直接呼叫 DeepSeek / Seedream，**金鑰不會進到 repo**。
 
-第一次開啟會跳出設定：填 Seedream API Key、選開通地區（火山方舟中國區 / BytePlus 海外）、模型 ID；DeepSeek Key 選填。
+第一次開啟請到設定：生圖服務選 **fal.ai**（預設），填入 fal API Key（https://fal.ai/dashboard/keys），選模型：
+
+| 模型 | 適合 | DeepSeek 指令 |
+| --- | --- | --- |
+| Seedream 4.5 編輯（預設） | 移除後要補較複雜的背景、或想改內容 | 會用 |
+| Seedream 4.0 編輯 | 同上，較便宜 | 會用 |
+| Bria 專業消除 | 單純把東西擦掉，最貼合圈選範圍 | 不需要 |
+
+也可切換回火山方舟 / BytePlus 直接呼叫 Seedream。DeepSeek Key 選填。
 
 ### 如果出現「連線失敗…CORS」
 

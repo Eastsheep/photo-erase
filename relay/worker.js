@@ -9,6 +9,7 @@ const UPSTREAM = {
   deepseek: 'https://api.deepseek.com',
   'ark-cn': 'https://ark.cn-beijing.volces.com/api/v3',
   'ark-intl': 'https://ark.ap-southeast.bytepluses.com/api/v3',
+  fal: 'https://fal.run',
 };
 
 export default {
@@ -33,7 +34,10 @@ export default {
     const [, service, ...rest] = url.pathname.split('/');
     const base = UPSTREAM[service];
     const path = '/' + rest.join('/');
-    if (!base || !['/chat/completions', '/images/generations'].includes(path)) {
+    const okPath = service === 'fal'
+      ? /^\/fal-ai\/[a-z0-9._\/-]+$/.test(path) && !path.includes('..')
+      : ['/chat/completions', '/images/generations'].includes(path);
+    if (!base || !okPath) {
       return new Response('not found', { status: 404, headers: cors });
     }
     const upstream = await fetch(base + path, {

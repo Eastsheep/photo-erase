@@ -261,13 +261,13 @@ function region() { return store.get('pe.region', 'cn') === 'intl' ? 'intl' : 'c
 function netError(what, e) {
   return new Error(`${what} 連線失敗（${e.message}）。若是被瀏覽器擋下（CORS），請在設定填入「代理網址」，見 README 的 Cloudflare Worker 說明`);
 }
-async function directJson(url, key, body, what) {
+async function directJson(url, key, body, what, scheme = 'Bearer') {
   let r;
   try {
-    r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify(body) });
+    r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `${scheme} ${key}` }, body: JSON.stringify(body) });
   } catch (e) { throw netError(what, e); }
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`${what} 錯誤：${data?.error?.message || r.status}`);
+  if (!r.ok) throw new Error(`${what} 錯誤：${data?.error?.message || (typeof data?.detail === 'string' ? data.detail : data?.detail?.[0]?.msg) || r.status}`);
   return data;
 }
 async function enhanceDirect(instruction) {
@@ -280,10 +280,34 @@ async function enhanceDirect(instruction) {
   }, 'DeepSeek');
   return data?.choices?.[0]?.message?.content?.trim() || fallbackPrompt(instruction);
 }
-async function inpaintDirect({ image, marked, prompt, size }) {
-  const key = store.get('pe.ark');
-  if (!key) throw new Error('請先到「設定」填入 Seedream API Key');
-  const rg = region();
+const FAL_MODELS = {
+  'fal-ai/bytedance/seedream/v4.5/edit': 'Seedream 4.5',
+  'fal-ai/bytedance/seedream/v4/edit': 'Seedream 4.0',
+  'fal-ai/bria/eraser': 'Bria 專業消除',
+};
+function provider() { const p = store.get('pe.provider', 'fal'); return ['fal', 'ark-cn', 'ark-intl'].includes(p) ? p : 'fal'; }
+function genKey() { return provider() === 'fal' ? store.get('pe.fal') : store.get('pe.ark'); }
+function falModel() { const m = store.get('pe.falModel'); return FAL_MODELS[m] ? m : 'fal-ai/bytedance/seedream/v4.5/edit'; }
+function isEraser() { return provider() === 'fal' && falModel() === 'fal-ai/bria/eraser'; }
+function engineName() { return provider() === 'fal' ? FAL_MODELS[falModel()] : 'Seedream'; }
+
+async function inpaintDirect({ image, marked, mask, prompt, size }) {
+  const key = genKey();
+  if (!key) throw new Error('請先到「設定」填入生圖服務的 API Key');
+  const p = provider();
+  if (p === 'fal') {
+    const model = falModel();
+    const url = relayBase() ? `${relayBase()}/fal/${model}` : `https://fal.run/${model}`;
+    const [w, h] = size.split('x').map(Number);
+    const body = model === 'fal-ai/bria/eraser'
+      ? { image_url: image, mask_url: mask, mask_type: 'manual', sync_mode: true }
+      : { prompt, image_urls: [image, marked], image_size: { width: w, height: h }, num_images: 1, sync_mode: true, enable_safety_checker: true };
+    const data = await directJson(url, key, body, engineName(), 'Key');
+    const out = data?.image?.url || data?.images?.[0]?.url;
+    if (!out) throw new Error(`${engineName()} 未回傳圖片`);
+    return { image: out };
+  }
+  const rg = p === 'ark-intl' ? 'intl' : 'cn';
   const url = relayBase() ? `${relayBase()}/ark-${rg}/images/generations` : `${ARK_BASES[rg]}/images/generations`;
   const data = await directJson(url, key, {
     model: store.get('pe.model') || DEFAULT_MODEL[rg], prompt, image: [image, marked], size,
@@ -308,7 +332,7 @@ const backend = {
   inpaint: body => S.mode === 'server' ? api('api/inpaint', body) : inpaintDirect(body),
 };
 
-function loadImage(src) { return new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error('結果圖片無法載入')); i.src = src; }); }
+function loadImage(src) { return new Promise((ok, bad) => { const i = new Image(); if (/^https?:/.test(src)) i.crossOrigin = 'anonymous'; i.onload = () => ok(i); i.onerror = () => bad(new Error('結果圖片無法載入')); i.src = src; }); }
 
 // 把生成結果只貼回遮罩區域（邊緣羽化），遮罩外保留原圖像素
 function composite(genImg) {
@@ -336,28 +360,31 @@ function setBusy(on, step, text, sub = '') {
 
 $('#btnGo').onclick = async () => {
   if (maskIsEmpty()) return toast('請先用手指圈出要移除的範圍');
-  if (S.mode === 'direct' && !store.get('pe.ark')) { toast('請先填入 Seedream API Key'); return openSettings(); }
+  if (S.mode === 'direct' && !genKey()) { toast('請先填入生圖服務的 API Key'); return openSettings(); }
   const custom = !$('#instruction').hidden;
   const instruction = custom ? ($('#instruction').value.trim() || S.instruction) : S.instruction;
   try {
     let prompt = fallbackPrompt(instruction);
-    if ($('#useDeepseek').checked && (S.mode === 'server' || store.get('pe.deepseek'))) {
+    if (!(S.mode === 'direct' && isEraser()) && $('#useDeepseek').checked && (S.mode === 'server' || store.get('pe.deepseek'))) {
       setBusy(true, 1, 'AI 正在理解你的需求', 'DeepSeek 優化修圖指令');
       prompt = await backend.enhance(instruction);
     }
-    setBusy(true, 2, 'AI 正在補上背景', 'Seedream 生成中，約 10–40 秒');
+    setBusy(true, 2, 'AI 正在補上背景', `${S.mode === 'direct' ? engineName() : 'Seedream'} 生成中，約 10–40 秒`);
     const image = S.base.toDataURL('image/jpeg', 0.92);
     const marked = canvas(); const mc = marked.getContext('2d');
     mc.drawImage(S.base, 0, 0);
     const red = canvas(); const rc = red.getContext('2d'); rc.drawImage(S.mask, 0, 0);
     rc.globalCompositeOperation = 'source-in'; rc.fillStyle = '#ff0000'; rc.fillRect(0, 0, S.W, S.H);
     mc.drawImage(red, 0, 0);
-    const res = await backend.inpaint({ image, marked: marked.toDataURL('image/jpeg', 0.92), prompt, size: seedreamSize() });
+    const bw = canvas(); const bc = bw.getContext('2d'); bc.fillStyle = '#000'; bc.fillRect(0, 0, S.W, S.H);
+    const white = canvas(); const wc = white.getContext('2d'); wc.drawImage(S.mask, 0, 0);
+    wc.globalCompositeOperation = 'source-in'; wc.fillStyle = '#fff'; wc.fillRect(0, 0, S.W, S.H); bc.drawImage(white, 0, 0);
+    const res = await backend.inpaint({ image, marked: marked.toDataURL('image/jpeg', 0.92), mask: bw.toDataURL('image/png'), prompt, size: seedreamSize() });
     S.result = composite(await loadImage(res.image));
     S.split = 0.5;
-    $('#promptUsed').textContent = prompt;
+    $('#promptUsed').textContent = (S.mode === 'direct' && isEraser()) ? 'Bria 專業消除直接依照圈選範圍處理，不需要文字指令。' : prompt;
     showScreen('result'); render(); vibrate(20);
-    if (res.mock) toast('目前是 MOCK 測試模式，未真正呼叫 Seedream');
+    if (res.mock) toast('目前是 MOCK 測試模式，未真正呼叫生圖服務');
   } catch (err) {
     toast('失敗：' + err.message, 6000);
   } finally { setBusy(false); }
@@ -392,7 +419,7 @@ async function loadServerCfg() {
   $$('.server-only').forEach(el => el.hidden = S.mode !== 'server');
   $$('.direct-only').forEach(el => el.hidden = S.mode !== 'direct');
   if (!c) {
-    $('#serverStatus').textContent = store.get('pe.ark') ? '✓ 已設定金鑰，可以開始修圖' : '第一次使用：填入 Seedream API Key 就能開始。';
+    $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}` : '第一次使用：選擇生圖服務並填入 API Key 就能開始。';
     return;
   }
   $('#serverStatus').textContent = c.mock ? '伺服器：MOCK 測試模式'
@@ -402,17 +429,25 @@ async function loadServerCfg() {
 function openSettings() {
   $('#setPassword').value = store.get('pe.password'); $('#setDeepseek').value = store.get('pe.deepseek');
   $('#setArk').value = store.get('pe.ark'); $('#setModel').value = store.get('pe.model');
-  $('#setRegion').value = region(); $('#setRelay').value = store.get('pe.relay');
+  $('#setProvider').value = provider(); $('#setFal').value = store.get('pe.fal'); $('#setFalModel').value = falModel();
+  $('#setRelay').value = store.get('pe.relay'); syncProviderFields();
   $('#settings').showModal();
 }
 $('#btnSettings').onclick = openSettings;
+function syncProviderFields() {
+  const fal = $('#setProvider').value === 'fal';
+  $$('.fal-only').forEach(el => el.hidden = !fal || S.mode !== 'direct');
+  $$('.ark-only').forEach(el => el.hidden = fal && S.mode === 'direct');
+}
+$('#setProvider').addEventListener('change', syncProviderFields);
 $('#settings').addEventListener('click', e => { if (e.target === $('#settings')) $('#settings').close('cancel'); });
 $('#settings').addEventListener('close', () => {
   if ($('#settings').returnValue !== 'ok') return;
   store.set('pe.password', $('#setPassword').value.trim()); store.set('pe.deepseek', $('#setDeepseek').value.trim());
   store.set('pe.ark', $('#setArk').value.trim()); store.set('pe.model', $('#setModel').value.trim());
-  store.set('pe.region', $('#setRegion').value); store.set('pe.relay', $('#setRelay').value.trim());
-  if (S.mode === 'direct') $('#serverStatus').textContent = store.get('pe.ark') ? '✓ 已設定金鑰，可以開始修圖' : '第一次使用：填入 Seedream API Key 就能開始。';
+  store.set('pe.provider', $('#setProvider').value); store.set('pe.fal', $('#setFal').value.trim()); store.set('pe.falModel', $('#setFalModel').value);
+  store.set('pe.relay', $('#setRelay').value.trim());
+  if (S.mode === 'direct') $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}` : '第一次使用：選擇生圖服務並填入 API Key 就能開始。';
   toast('設定已儲存');
 });
 

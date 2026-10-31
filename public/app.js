@@ -281,14 +281,16 @@ async function enhanceDirect(instruction) {
   return data?.choices?.[0]?.message?.content?.trim() || fallbackPrompt(instruction);
 }
 const FAL_MODELS = {
+  'fal-ai/flux-pro/v1/erase': 'FLUX 專業消除',
   'fal-ai/bytedance/seedream/v4.5/edit': 'Seedream 4.5',
   'fal-ai/bytedance/seedream/v4/edit': 'Seedream 4.0',
   'fal-ai/bria/eraser': 'Bria 專業消除',
 };
 function provider() { const p = store.get('pe.provider', 'fal'); return ['fal', 'ark-cn', 'ark-intl'].includes(p) ? p : 'fal'; }
 function genKey() { return provider() === 'fal' ? store.get('pe.fal') : store.get('pe.ark'); }
-function falModel() { const m = store.get('pe.falModel'); return FAL_MODELS[m] ? m : 'fal-ai/bytedance/seedream/v4.5/edit'; }
-function isEraser() { return provider() === 'fal' && falModel() === 'fal-ai/bria/eraser'; }
+function falModel() { const m = store.get('pe.falModel'); return FAL_MODELS[m] ? m : 'fal-ai/flux-pro/v1/erase'; }
+const MASK_MODELS = ['fal-ai/flux-pro/v1/erase', 'fal-ai/bria/eraser'];
+function isEraser() { return provider() === 'fal' && MASK_MODELS.includes(falModel()); }
 function engineName() { return provider() === 'fal' ? FAL_MODELS[falModel()] : 'Seedream'; }
 
 async function inpaintDirect({ image, marked, mask, prompt, size }) {
@@ -299,7 +301,9 @@ async function inpaintDirect({ image, marked, mask, prompt, size }) {
     const model = falModel();
     const url = relayBase() ? `${relayBase()}/fal/${model}` : `https://fal.run/${model}`;
     const [w, h] = size.split('x').map(Number);
-    const body = model === 'fal-ai/bria/eraser'
+    const body = model === 'fal-ai/flux-pro/v1/erase'
+      ? { image_url: image, mask_url: mask, dilate_pixels: 10, sync_mode: true, output_format: 'jpeg' }
+      : model === 'fal-ai/bria/eraser'
       ? { image_url: image, mask_url: mask, mask_type: 'manual', sync_mode: true }
       : { prompt, image_urls: [image, marked], image_size: { width: w, height: h }, num_images: 1, sync_mode: true, enable_safety_checker: true };
     const data = await directJson(url, key, body, engineName(), 'Key');
@@ -382,7 +386,7 @@ $('#btnGo').onclick = async () => {
     const res = await backend.inpaint({ image, marked: marked.toDataURL('image/jpeg', 0.92), mask: bw.toDataURL('image/png'), prompt, size: seedreamSize() });
     S.result = composite(await loadImage(res.image));
     S.split = 0.5;
-    $('#promptUsed').textContent = (S.mode === 'direct' && isEraser()) ? 'Bria 專業消除直接依照圈選範圍處理，不需要文字指令。' : prompt;
+    $('#promptUsed').textContent = (S.mode === 'direct' && isEraser()) ? `${engineName()} 直接依照圈選範圍處理，不需要文字指令。` : prompt;
     showScreen('result'); render(); vibrate(20);
     if (res.mock) toast('目前是 MOCK 測試模式，未真正呼叫生圖服務');
   } catch (err) {

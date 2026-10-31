@@ -1,0 +1,41 @@
+:root{--bg:#111418;--panel:#1b2027;--line:#2b323c;--text:#eef1f5;--muted:#93a0b0;--accent:#ff5a4e;--accent2:#ffb04e}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,"PingFang TC","Noto Sans TC",system-ui,sans-serif}
+body{display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.top{display:flex;align-items:center;justify-content:space-between;padding:10px 16px}
+.top h1{font-size:18px;margin:0;letter-spacing:.05em}
+.top-actions{display:flex;gap:8px}
+main{flex:1;display:flex;flex-direction:column;min-height:0}
+button{font:inherit;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);padding:9px 14px;cursor:pointer}
+button.ghost{background:transparent}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button:disabled{opacity:.5}
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:16px}
+.pick{display:flex;flex-direction:column;align-items:center;gap:10px;border:2px dashed var(--line);border-radius:18px;padding:48px 28px;cursor:pointer;width:min(360px,100%)}
+.pick-icon{font-size:40px;color:var(--accent)}
+.hint,.muted{color:var(--muted);font-size:14px;text-align:center;margin:0}
+.editor{flex:1;display:flex;flex-direction:column;min-height:0;gap:8px;padding:0 12px 12px}
+.stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#0a0c0f;border-radius:12px;overflow:hidden}
+#view{max-width:100%;max-height:100%;touch-action:none;display:block}
+.busy{position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.spinner{width:42px;height:42px;border:4px solid #fff3;border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toolbar,.prompt-row,.result-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:transparent}
+.seg button.on{background:var(--accent);color:#fff}
+.size{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;flex:1;min-width:120px}
+.size input{flex:1}
+#instruction{flex:1 1 100%;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit}
+.chk{color:var(--muted);font-size:14px;display:flex;align-items:center;gap:4px}
+.prompt-row .primary,.result-row .primary{margin-left:auto}
+.prompt-used{font-size:13px;color:var(--muted)}
+.prompt-used p{white-space:pre-wrap;margin:6px 0 0}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:16px;width:min(440px,calc(100% - 32px))}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h2{margin:0 0 8px;font-size:18px}
+dialog label{display:flex;flex-direction:column;gap:4px;font-size:14px;margin:10px 0;color:var(--muted)}
+dialog input,dialog select{padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit}
+.dlg-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#000d;padding:10px 16px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);z-index:10}
+[hidden]{display:none!important}

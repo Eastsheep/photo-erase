@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>修圖達人</title>
+<meta name="theme-color" content="#111418">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="修圖達人">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1>修圖達人</h1>
+  <div class="top-actions">
+    <button id="btnNew" class="ghost" title="換一張">換圖</button>
+    <button id="btnSettings" class="ghost" title="設定">設定</button>
+  </div>
+</header>
+
+<main>
+  <section id="empty" class="empty">
+    <label class="pick">
+      <input id="fileInput" type="file" accept="image/*" hidden>
+      <span class="pick-icon">＋</span>
+      <span>選擇或拍攝一張照片</span>
+    </label>
+    <p class="hint">用手指圈出要移除的路人或物件，AI 會自動補上背景。</p>
+  </section>
+
+  <section id="editor" class="editor" hidden>
+    <div id="stage" class="stage">
+      <canvas id="view"></canvas>
+      <div id="busy" class="busy" hidden><div class="spinner"></div><p id="busyText">處理中…</p></div>
+    </div>
+
+    <div class="toolbar" id="drawTools">
+      <div class="seg" role="radiogroup">
+        <button data-tool="lasso" class="on">圈選</button>
+        <button data-tool="brush">塗抹</button>
+        <button data-tool="erase">擦除</button>
+      </div>
+      <label class="size">筆刷 <input id="brushSize" type="range" min="8" max="120" value="40"></label>
+      <button id="btnUndo" class="ghost">復原</button>
+      <button id="btnClear" class="ghost">清除</button>
+    </div>
+
+    <div class="prompt-row" id="promptRow">
+      <input id="instruction" type="text" value="移除圈選範圍內的路人與物件，自然補上背景">
+      <label class="chk"><input id="useDeepseek" type="checkbox" checked> DeepSeek 強化</label>
+      <button id="btnGo" class="primary">開始修圖</button>
+    </div>
+
+    <div class="result-row" id="resultRow" hidden>
+      <button id="btnCompare" class="ghost">按住看原圖</button>
+      <button id="btnDiscard" class="ghost">不滿意，重來</button>
+      <button id="btnKeep" class="ghost">繼續修這張</button>
+      <button id="btnSave" class="primary">儲存</button>
+    </div>
+    <details class="prompt-used" id="promptUsedBox" hidden><summary>本次使用的提示詞</summary><p id="promptUsed"></p></details>
+  </section>
+</main>
+
+<dialog id="settings">
+  <form method="dialog">
+    <h2>設定</h2>
+    <p class="muted" id="serverStatus"></p>
+    <label class="server-only">使用密碼（伺服器有設定才需要）<input id="setPassword" type="password" autocomplete="current-password"></label>
+    <label>DeepSeek API Key（選填，沒填就用內建提示詞）<input id="setDeepseek" type="password" placeholder="sk-..."></label>
+    <label>Seedream API Key（火山方舟 / BytePlus）<input id="setArk" type="password"></label>
+    <label class="direct-only">Seedream 開通地區
+      <select id="setRegion"><option value="cn">火山方舟（中國區）</option><option value="intl">BytePlus ModelArk（海外）</option></select>
+    </label>
+    <label>Seedream 模型 ID（留空用預設）<input id="setModel" type="text" placeholder="doubao-seedream-4-0-250828"></label>
+    <label class="direct-only">代理網址（選填，瀏覽器被擋時才需要）<input id="setRelay" type="url" placeholder="https://xxx.workers.dev"></label>
+    <p class="muted">金鑰只存在這支手機的瀏覽器裡，不會上傳到 GitHub。</p>
+    <div class="dlg-actions"><button value="cancel" class="ghost">取消</button><button id="btnSaveSettings" value="ok" class="primary">儲存</button></div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

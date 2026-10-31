@@ -1,0 +1,12 @@
+{
+  "name": "photo-eraser",
+  "version": "0.1.0",
+  "description": "修圖達人：手指圈選移除路人/物件的 PWA（DeepSeek 強化提示詞 + Seedream 生圖）",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "mock": "MOCK=1 node server.js"
+  },
+  "engines": { "node": ">=18" }
+}

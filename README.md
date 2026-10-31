@@ -25,7 +25,7 @@ API 金鑰只存在你手機的瀏覽器（設定頁填入），由網頁直接�
 代表 API 不允許網頁直接呼叫，需要一個小代理：
 
 1. 到 Cloudflare 後台 → Workers & Pages → Create Worker，把 `relay/worker.js` 整個貼上 → Deploy。
-2. Worker 的 Settings → Variables 新增 `ALLOWED_ORIGIN` = `https://eastsheep.github.io`（只讓你的網站能用）。
+2. 程式預設只允許 `https://eastsheep.github.io` 使用；用瀏覽器打開 Worker 網址看到「代理運作中 ✓」就成功了。
 3. App「設定 → 代理網址」填入 Worker 網址，例如 `https://photo-relay.xxx.workers.dev`。
 
 代理只轉送，不保存金鑰。Cloudflare 免費方案每天 10 萬次請求，個人使用綽綽有餘。

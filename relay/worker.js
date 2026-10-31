@@ -3,7 +3,7 @@
 // 它只做轉送，不保存任何金鑰；金鑰仍由 App 從手機送出。
 // 部署：Cloudflare 後台 → Workers & Pages → Create Worker → 貼上本檔 → Deploy，
 //       再到 App「設定 → 代理網址」填入 https://<名稱>.<帳號>.workers.dev
-// 建議在 Worker 的 Settings → Variables 設 ALLOWED_ORIGIN = https://eastsheep.github.io，只允許你的網站使用。
+// 預設只允許 https://eastsheep.github.io 使用；要改可在 Worker 的 Settings → Variables 設 ALLOWED_ORIGIN（多個用逗號隔開，* 代表全部）。
 
 const UPSTREAM = {
   deepseek: 'https://api.deepseek.com',
@@ -13,11 +13,15 @@ const UPSTREAM = {
 
 export default {
   async fetch(req, env) {
+    if (req.method === 'GET') {
+      return new Response('修圖達人代理運作中 ✓ 把這個網址貼到 App 的「設定 → 代理網址」', { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    }
     const origin = req.headers.get('Origin') || '';
-    const allowed = env.ALLOWED_ORIGIN || '*';
-    if (allowed !== '*' && origin !== allowed) return new Response('forbidden', { status: 403 });
+    const allowed = (env.ALLOWED_ORIGIN || 'https://eastsheep.github.io').split(',').map(s => s.trim());
+    const ok = allowed.includes('*') || allowed.includes(origin);
+    if (!ok) return new Response('forbidden: origin not allowed', { status: 403 });
     const cors = {
-      'Access-Control-Allow-Origin': allowed === '*' ? '*' : origin,
+      'Access-Control-Allow-Origin': allowed.includes('*') ? '*' : origin,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Authorization, Content-Type',
       'Access-Control-Max-Age': '86400',

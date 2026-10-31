@@ -18,16 +18,17 @@
 推到 `main` 會自動用 GitHub Actions 部署 `public/`。這是純靜態網站，App 會自動進入「直連模式」：
 API 金鑰只存在你手機的瀏覽器（設定頁填入），由網頁直接呼叫 DeepSeek / Seedream，**金鑰不會進到 repo**。
 
-第一次開啟請到設定：生圖服務選 **fal.ai**（預設），填入 fal API Key（https://fal.ai/dashboard/keys），選模型：
+第一次開啟請到設定：生圖服務選 **Google Gemini · Nano Banana**（預設），填入 Gemini API Key（https://aistudio.google.com/apikey），選模型：
 
-| 模型 | 適合 | DeepSeek 指令 |
-| --- | --- | --- |
-| FLUX 專業消除（預設，fal-ai/flux-pro/v1/erase） | 移除路人、物件，最自然 | 不需要 |
-| Seedream 4.5 編輯 | 移除後要補較複雜的背景、或想改內容 | 會用 |
-| Seedream 4.0 編輯 | 同上，較便宜 | 會用 |
-| Bria 專業消除 | 單純把東西擦掉，最貼合圈選範圍 | 不需要 |
+| 模型 ID | 說明 |
+| --- | --- |
+| `gemini-nano-banana-2.1`（預設） | Nano Banana 2.1，Google 建議的新版 |
+| `gemini-3.1-flash-image` | Nano Banana 2，較快較省 |
+| `gemini-3-pro-image` | Nano Banana Pro，最高畫質 |
+| `gemini-2.5-flash-image` | Nano Banana 舊版 |
 
-也可切換回火山方舟 / BytePlus 直接呼叫 Seedream。DeepSeek Key 選填。
+呼叫 Google 的 Interactions API（`/v1beta/interactions`），不支援時自動退回 `generateContent`。結果只貼回圈選範圍。
+進階選項仍保留 fal.ai 與火山方舟 / BytePlus。DeepSeek Key 選填。
 
 ### 如果出現「連線失敗…CORS」
 

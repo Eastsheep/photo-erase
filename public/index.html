@@ -67,7 +67,7 @@
     </div>
     <ul class="features">
       <li><span class="f-ico"><svg><use href="#i-hand"/></svg></span><div><b>手指圈選</b><small>圈選、塗抹、雙指縮放精修</small></div></li>
-      <li><span class="f-ico"><svg><use href="#i-sparkles"/></svg></span><div><b>AI 智慧補圖</b><small>DeepSeek 優化指令，fal.ai 生成</small></div></li>
+      <li><span class="f-ico"><svg><use href="#i-sparkles"/></svg></span><div><b>AI 智慧補圖</b><small>DeepSeek 優化指令，Google Nano Banana 生成</small></div></li>
       <li><span class="f-ico"><svg><use href="#i-shield"/></svg></span><div><b>只改你圈的地方</b><small>其他畫面像素完全保留</small></div></li>
     </ul>
   </section>
@@ -147,9 +147,19 @@
     <label class="server-only">使用密碼<input id="setPassword" type="password" autocomplete="current-password"></label>
     <label class="direct-only">生圖服務
       <select id="setProvider">
-        <option value="fal">fal.ai（推薦）</option>
+        <option value="google">Google Gemini · Nano Banana（推薦）</option>
+        <option value="fal">fal.ai</option>
         <option value="ark-cn">火山方舟（中國區）</option>
         <option value="ark-intl">BytePlus ModelArk（海外）</option>
+      </select>
+    </label>
+    <label class="google-only">Google Gemini API Key<input id="setGoogle" type="password" placeholder="在 aistudio.google.com/apikey 建立"></label>
+    <label class="google-only">模型
+      <select id="setGoogleModel">
+        <option value="gemini-nano-banana-2.1">Nano Banana 2.1（推薦）</option>
+        <option value="gemini-3.1-flash-image">Nano Banana 2（較快較省）</option>
+        <option value="gemini-3-pro-image">Nano Banana Pro（最高畫質）</option>
+        <option value="gemini-2.5-flash-image">Nano Banana（舊版）</option>
       </select>
     </label>
     <label class="fal-only">fal.ai API Key<input id="setFal" type="password" placeholder="在 fal.ai/dashboard/keys 建立"></label>

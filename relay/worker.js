@@ -10,6 +10,7 @@ const UPSTREAM = {
   'ark-cn': 'https://ark.cn-beijing.volces.com/api/v3',
   'ark-intl': 'https://ark.ap-southeast.bytepluses.com/api/v3',
   fal: 'https://fal.run',
+  google: 'https://generativelanguage.googleapis.com',
 };
 
 export default {
@@ -24,7 +25,7 @@ export default {
     const cors = {
       'Access-Control-Allow-Origin': allowed.includes('*') ? '*' : origin,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type, x-goog-api-key',
       'Access-Control-Max-Age': '86400',
     };
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
@@ -36,13 +37,20 @@ export default {
     const path = '/' + rest.join('/');
     const okPath = service === 'fal'
       ? /^\/fal-ai\/[a-z0-9._\/-]+$/.test(path) && !path.includes('..')
+      : service === 'google'
+      ? path === '/v1beta/interactions' || /^\/v1beta\/models\/[a-z0-9.-]+:generateContent$/.test(path)
       : ['/chat/completions', '/images/generations'].includes(path);
     if (!base || !okPath) {
       return new Response('not found', { status: 404, headers: cors });
     }
     const upstream = await fetch(base + path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: req.headers.get('Authorization') || '' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(service === 'google'
+          ? { 'x-goog-api-key': req.headers.get('x-goog-api-key') || '' }
+          : { Authorization: req.headers.get('Authorization') || '' }),
+      },
       body: await req.arrayBuffer(),
     });
     const headers = new Headers(cors);

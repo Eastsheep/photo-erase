@@ -286,17 +286,87 @@ const FAL_MODELS = {
   'fal-ai/bytedance/seedream/v4/edit': 'Seedream 4.0',
   'fal-ai/bria/eraser': 'Bria 專業消除',
 };
-function provider() { const p = store.get('pe.provider', 'fal'); return ['fal', 'ark-cn', 'ark-intl'].includes(p) ? p : 'fal'; }
-function genKey() { return provider() === 'fal' ? store.get('pe.fal') : store.get('pe.ark'); }
+const GOOGLE_MODELS = {
+  'gemini-nano-banana-2.1': 'Nano Banana 2.1',
+  'gemini-3.1-flash-image': 'Nano Banana 2',
+  'gemini-3-pro-image': 'Nano Banana Pro',
+  'gemini-2.5-flash-image': 'Nano Banana',
+};
+function provider() { const p = store.get('pe.provider', 'google'); return ['google', 'fal', 'ark-cn', 'ark-intl'].includes(p) ? p : 'google'; }
+function googleModel() { const m = store.get('pe.googleModel'); return GOOGLE_MODELS[m] ? m : 'gemini-nano-banana-2.1'; }
+function genKey() { const p = provider(); return store.get(p === 'google' ? 'pe.google' : p === 'fal' ? 'pe.fal' : 'pe.ark'); }
 function falModel() { const m = store.get('pe.falModel'); return FAL_MODELS[m] ? m : 'fal-ai/flux-pro/v1/erase'; }
 const MASK_MODELS = ['fal-ai/flux-pro/v1/erase', 'fal-ai/bria/eraser'];
 function isEraser() { return provider() === 'fal' && MASK_MODELS.includes(falModel()); }
-function engineName() { return provider() === 'fal' ? FAL_MODELS[falModel()] : 'Seedream'; }
+function engineName() { const p = provider(); return p === 'google' ? GOOGLE_MODELS[googleModel()] : p === 'fal' ? FAL_MODELS[falModel()] : 'Seedream'; }
+
+// ---------- Google Gemini（Nano Banana）----------
+const ASPECTS = ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
+function nearestAspect() {
+  const r = S.W / S.H; let best = '1:1', d = 1e9;
+  for (const a of ASPECTS) { const [x, y] = a.split(':').map(Number); const e = Math.abs(Math.log(r / (x / y))); if (e < d) { d = e; best = a; } }
+  return best;
+}
+// 從回應中找出最後一張圖片（相容 Interactions API 與 generateContent 兩種格式）
+function findImage(obj) {
+  let found = null;
+  (function walk(o) {
+    if (!o || typeof o !== 'object') return;
+    if (Array.isArray(o)) return o.forEach(walk);
+    const inl = o.inlineData || o.inline_data;
+    if (inl?.data) found = { data: inl.data, mime: inl.mimeType || inl.mime_type || 'image/png' };
+    else if (o.type === 'image' && typeof o.data === 'string' && o.data.length > 100) found = { data: o.data, mime: o.mime_type || o.mimeType || 'image/png' };
+    for (const k in o) if (k !== 'inlineData' && k !== 'inline_data') walk(o[k]);
+  })(obj);
+  return found;
+}
+async function googleCall(path, key, body) {
+  const base = relayBase() ? `${relayBase()}/google` : 'https://generativelanguage.googleapis.com';
+  let r;
+  try {
+    r = await fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body) });
+  } catch (e) { throw netError('Google Gemini', e); }
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, data };
+}
+async function inpaintGoogle({ image, marked, prompt }, key) {
+  const model = googleModel();
+  const b64 = u => u.split(',')[1];
+  const aspect = nearestAspect();
+  const size = model.includes('lite') ? '1K' : '2K';
+  // 優先使用新版 Interactions API
+  let res = await googleCall('/v1beta/interactions', key, {
+    model,
+    input: [
+      { type: 'text', text: prompt },
+      { type: 'image', mime_type: 'image/jpeg', data: b64(image) },
+      { type: 'image', mime_type: 'image/jpeg', data: b64(marked) },
+    ],
+    response_format: { type: 'image', mime_type: 'image/jpeg', aspect_ratio: aspect, image_size: size },
+  });
+  // 不支援時退回 generateContent
+  if (!res.ok && [400, 404].includes(res.status)) {
+    const fb = await googleCall(`/v1beta/models/${model}:generateContent`, key, {
+      contents: [{ parts: [
+        { text: prompt },
+        { inline_data: { mime_type: 'image/jpeg', data: b64(image) } },
+        { inline_data: { mime_type: 'image/jpeg', data: b64(marked) } },
+      ] }],
+      generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: aspect } },
+    });
+    if (fb.ok) res = fb;
+  }
+  if (!res.ok) throw new Error(`Google Gemini 錯誤：${res.data?.error?.message || res.status}`);
+  const img = findImage(res.data);
+  if (!img) throw new Error('Gemini 沒有回傳圖片（可能被安全機制擋下，換個指令或圈選範圍再試）');
+  return { image: `data:${img.mime};base64,${img.data}` };
+}
 
 async function inpaintDirect({ image, marked, mask, prompt, size }) {
   const key = genKey();
   if (!key) throw new Error('請先到「設定」填入生圖服務的 API Key');
   const p = provider();
+  if (p === 'google') return inpaintGoogle({ image, marked, prompt }, key);
   if (p === 'fal') {
     const model = falModel();
     const url = relayBase() ? `${relayBase()}/fal/${model}` : `https://fal.run/${model}`;
@@ -423,7 +493,7 @@ async function loadServerCfg() {
   $$('.server-only').forEach(el => el.hidden = S.mode !== 'server');
   $$('.direct-only').forEach(el => el.hidden = S.mode !== 'direct');
   if (!c) {
-    $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}` : '第一次使用：選擇生圖服務並填入 API Key 就能開始。';
+    $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}` : '第一次使用：填入 Google Gemini API Key 就能開始。';
     return;
   }
   $('#serverStatus').textContent = c.mock ? '伺服器：MOCK 測試模式'
@@ -433,15 +503,17 @@ async function loadServerCfg() {
 function openSettings() {
   $('#setPassword').value = store.get('pe.password'); $('#setDeepseek').value = store.get('pe.deepseek');
   $('#setArk').value = store.get('pe.ark'); $('#setModel').value = store.get('pe.model');
-  $('#setProvider').value = provider(); $('#setFal').value = store.get('pe.fal'); $('#setFalModel').value = falModel();
+  $('#setProvider').value = provider(); $('#setGoogle').value = store.get('pe.google'); $('#setGoogleModel').value = googleModel();
+  $('#setFal').value = store.get('pe.fal'); $('#setFalModel').value = falModel();
   $('#setRelay').value = store.get('pe.relay'); syncProviderFields();
   $('#settings').showModal();
 }
 $('#btnSettings').onclick = openSettings;
 function syncProviderFields() {
-  const fal = $('#setProvider').value === 'fal';
-  $$('.fal-only').forEach(el => el.hidden = !fal || S.mode !== 'direct');
-  $$('.ark-only').forEach(el => el.hidden = fal && S.mode === 'direct');
+  const p = $('#setProvider').value, direct = S.mode === 'direct';
+  $$('.google-only').forEach(el => el.hidden = !direct || p !== 'google');
+  $$('.fal-only').forEach(el => el.hidden = !direct || p !== 'fal');
+  $$('.ark-only').forEach(el => el.hidden = direct && !p.startsWith('ark'));
 }
 $('#setProvider').addEventListener('change', syncProviderFields);
 $('#settings').addEventListener('click', e => { if (e.target === $('#settings')) $('#settings').close('cancel'); });
@@ -449,9 +521,9 @@ $('#settings').addEventListener('close', () => {
   if ($('#settings').returnValue !== 'ok') return;
   store.set('pe.password', $('#setPassword').value.trim()); store.set('pe.deepseek', $('#setDeepseek').value.trim());
   store.set('pe.ark', $('#setArk').value.trim()); store.set('pe.model', $('#setModel').value.trim());
-  store.set('pe.provider', $('#setProvider').value); store.set('pe.fal', $('#setFal').value.trim()); store.set('pe.falModel', $('#setFalModel').value);
+  store.set('pe.provider', $('#setProvider').value); store.set('pe.google', $('#setGoogle').value.trim()); store.set('pe.googleModel', $('#setGoogleModel').value); store.set('pe.fal', $('#setFal').value.trim()); store.set('pe.falModel', $('#setFalModel').value);
   store.set('pe.relay', $('#setRelay').value.trim());
-  if (S.mode === 'direct') $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}` : '第一次使用：選擇生圖服務並填入 API Key 就能開始。';
+  if (S.mode === 'direct') $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}` : '第一次使用：填入 Google Gemini API Key 就能開始。';
   toast('設定已儲存');
 });
 

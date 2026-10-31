@@ -2,9 +2,9 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <title>修圖達人</title>
-<meta name="theme-color" content="#111418">
+<meta name="theme-color" content="#0b0d12">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,71 +15,145 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
-  <h1>修圖達人</h1>
-  <div class="top-actions">
-    <button id="btnNew" class="ghost" title="換一張">換圖</button>
-    <button id="btnSettings" class="ghost" title="設定">設定</button>
-  </div>
-</header>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-lasso" viewBox="0 0 24 24"><path d="M7 22a5 5 0 0 1-2-4"/><path d="M3.3 14A6.8 6.8 0 0 1 2 10c0-4.4 4.5-8 10-8s10 3.6 10 8-4.5 8-10 8a12 12 0 0 1-5-1"/><path d="M5 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></symbol>
+    <symbol id="i-brush" viewBox="0 0 24 24"><path d="m9.06 11.9 8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></symbol>
+    <symbol id="i-eraser" viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L19.7 10.7 13.9 12.6 12 18.4 10.1 12.6 4.3 10.7 10.1 8.8z"/><path d="M5 3v4M3 5h4M19 17v4M17 19h4"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0v0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  </defs>
+</svg>
 
-<main>
-  <section id="empty" class="empty">
-    <label class="pick">
-      <input id="fileInput" type="file" accept="image/*" hidden>
-      <span class="pick-icon">＋</span>
-      <span>選擇或拍攝一張照片</span>
-    </label>
-    <p class="hint">用手指圈出要移除的路人或物件，AI 會自動補上背景。</p>
+<div class="app">
+  <header class="bar">
+    <button id="btnBack" class="icon-btn" aria-label="返回" hidden><svg><use href="#i-back"/></svg></button>
+    <div class="brand" id="brand"><img src="icon.svg" alt=""><span>修圖達人</span></div>
+    <div class="bar-title" id="barTitle" hidden></div>
+    <button id="btnSettings" class="icon-btn" aria-label="設定"><svg><use href="#i-settings"/></svg></button>
+  </header>
+
+  <!-- 首頁 -->
+  <section id="home" class="home">
+    <div class="hero">
+      <div class="hero-art">
+        <div class="ring"></div>
+        <svg class="hero-ico"><use href="#i-sparkles"/></svg>
+      </div>
+      <h1>一筆圈選<br><span class="grad">路人瞬間消失</span></h1>
+      <p>用手指圈出不想要的人或物，AI 自動補上自然背景。</p>
+    </div>
+    <div class="home-actions">
+      <label class="btn btn-primary btn-lg">
+        <input id="fileInput" type="file" accept="image/*" hidden>
+        <svg><use href="#i-image"/></svg>從相簿選擇
+      </label>
+      <label class="btn btn-glass btn-lg">
+        <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
+        <svg><use href="#i-camera"/></svg>拍照
+      </label>
+    </div>
+    <ul class="features">
+      <li><span class="f-ico"><svg><use href="#i-hand"/></svg></span><div><b>手指圈選</b><small>圈選、塗抹、雙指縮放精修</small></div></li>
+      <li><span class="f-ico"><svg><use href="#i-sparkles"/></svg></span><div><b>AI 智慧補圖</b><small>DeepSeek 優化指令，Seedream 生成</small></div></li>
+      <li><span class="f-ico"><svg><use href="#i-shield"/></svg></span><div><b>只改你圈的地方</b><small>其他畫面像素完全保留</small></div></li>
+    </ul>
   </section>
 
+  <!-- 編輯 -->
   <section id="editor" class="editor" hidden>
     <div id="stage" class="stage">
-      <canvas id="view"></canvas>
-      <div id="busy" class="busy" hidden><div class="spinner"></div><p id="busyText">處理中…</p></div>
-    </div>
-
-    <div class="toolbar" id="drawTools">
-      <div class="seg" role="radiogroup">
-        <button data-tool="lasso" class="on">圈選</button>
-        <button data-tool="brush">塗抹</button>
-        <button data-tool="erase">擦除</button>
+      <div id="board" class="board">
+        <canvas id="view"></canvas>
+        <div id="compare" class="compare" hidden>
+          <div class="cmp-line"><div class="cmp-knob"><svg viewBox="0 0 24 24"><path d="m9 6-6 6 6 6M15 6l6 6-6 6"/></svg></div></div>
+        </div>
+        <div id="scan" class="scan" hidden><div class="scan-line"></div></div>
       </div>
-      <label class="size">筆刷 <input id="brushSize" type="range" min="8" max="120" value="40"></label>
-      <button id="btnUndo" class="ghost">復原</button>
-      <button id="btnClear" class="ghost">清除</button>
+      <span id="tagBefore" class="tag tag-l" hidden>原圖</span>
+      <span id="tagAfter" class="tag tag-r" hidden>修復後</span>
+      <button id="btnFit" class="icon-btn floating" aria-label="還原縮放" hidden><svg><use href="#i-fit"/></svg></button>
+      <div id="coach" class="coach">用手指圈出要移除的人或物　·　雙指可縮放</div>
+      <div id="busy" class="busy" hidden>
+        <div class="busy-card">
+          <div class="steps"><span id="step1" class="dot"></span><span id="step2" class="dot"></span></div>
+          <p id="busyText">處理中…</p>
+          <small id="busySub"></small>
+        </div>
+      </div>
     </div>
 
-    <div class="prompt-row" id="promptRow">
-      <input id="instruction" type="text" value="移除圈選範圍內的路人與物件，自然補上背景">
-      <label class="chk"><input id="useDeepseek" type="checkbox" checked> DeepSeek 強化</label>
-      <button id="btnGo" class="primary">開始修圖</button>
+    <div id="editPanel" class="panel">
+      <div class="chips" id="chips">
+        <button class="chip on" data-preset="移除圈選範圍內的路人，自然補上背景">路人</button>
+        <button class="chip" data-preset="移除圈選範圍內的雜物與多餘物件，自然補上背景">雜物</button>
+        <button class="chip" data-preset="移除圈選範圍內的文字、標誌與浮水印，還原底下的材質">文字</button>
+        <button class="chip" data-preset="移除圈選範圍內的電線與桿子，還原天空與背景">電線</button>
+        <button class="chip" data-preset="移除圈選範圍內的瑕疵與污漬，保持質感自然">瑕疵</button>
+        <button class="chip" data-preset="custom">自訂…</button>
+      </div>
+      <input id="instruction" class="field" type="text" placeholder="描述你要怎麼修，例如：移除左邊穿紅衣的人" hidden>
+
+      <div class="brush-row" id="brushRow" hidden>
+        <span class="brush-dot" id="brushDot"></span>
+        <input id="brushSize" type="range" min="8" max="120" value="40" aria-label="筆刷大小">
+      </div>
+
+      <div class="dock">
+        <button class="tool on" data-tool="lasso"><svg><use href="#i-lasso"/></svg><span>圈選</span></button>
+        <button class="tool" data-tool="brush"><svg><use href="#i-brush"/></svg><span>塗抹</span></button>
+        <button class="tool" data-tool="erase"><svg><use href="#i-eraser"/></svg><span>擦除</span></button>
+        <button class="tool" id="btnUndo"><svg><use href="#i-undo"/></svg><span>復原</span></button>
+        <button class="tool" id="btnClear"><svg><use href="#i-trash"/></svg><span>清除</span></button>
+      </div>
+
+      <div class="go-row">
+        <label class="toggle" title="用 DeepSeek 優化提示詞">
+          <input id="useDeepseek" type="checkbox" checked><span class="track"><span class="thumb"></span></span><small>AI 優化指令</small>
+        </label>
+        <button id="btnGo" class="btn btn-primary btn-go" disabled><svg><use href="#i-sparkles"/></svg>AI 移除</button>
+      </div>
     </div>
 
-    <div class="result-row" id="resultRow" hidden>
-      <button id="btnCompare" class="ghost">按住看原圖</button>
-      <button id="btnDiscard" class="ghost">不滿意，重來</button>
-      <button id="btnKeep" class="ghost">繼續修這張</button>
-      <button id="btnSave" class="primary">儲存</button>
+    <div id="resultPanel" class="panel" hidden>
+      <p class="hint-line">拖曳畫面上的滑桿，比對修圖前後</p>
+      <div class="result-actions">
+        <button id="btnDiscard" class="btn btn-glass"><svg><use href="#i-refresh"/></svg>重來</button>
+        <button id="btnKeep" class="btn btn-glass"><svg><use href="#i-layers"/></svg>繼續修</button>
+        <button id="btnSave" class="btn btn-primary"><svg><use href="#i-download"/></svg>儲存</button>
+      </div>
+      <details class="prompt-used" id="promptUsedBox"><summary>查看本次 AI 指令</summary><p id="promptUsed"></p></details>
     </div>
-    <details class="prompt-used" id="promptUsedBox" hidden><summary>本次使用的提示詞</summary><p id="promptUsed"></p></details>
   </section>
-</main>
+</div>
 
-<dialog id="settings">
+<dialog id="settings" class="sheet">
   <form method="dialog">
-    <h2>設定</h2>
-    <p class="muted" id="serverStatus"></p>
-    <label class="server-only">使用密碼（伺服器有設定才需要）<input id="setPassword" type="password" autocomplete="current-password"></label>
-    <label>DeepSeek API Key（選填，沒填就用內建提示詞）<input id="setDeepseek" type="password" placeholder="sk-..."></label>
-    <label>Seedream API Key（火山方舟 / BytePlus）<input id="setArk" type="password"></label>
+    <div class="sheet-grip"></div>
+    <div class="sheet-head"><h2>設定</h2><button value="cancel" class="icon-btn" aria-label="關閉"><svg><use href="#i-x"/></svg></button></div>
+    <p class="status" id="serverStatus"></p>
+    <label class="server-only">使用密碼<input id="setPassword" type="password" autocomplete="current-password"></label>
+    <label>Seedream API Key<input id="setArk" type="password" placeholder="火山方舟 / BytePlus 金鑰"></label>
     <label class="direct-only">Seedream 開通地區
       <select id="setRegion"><option value="cn">火山方舟（中國區）</option><option value="intl">BytePlus ModelArk（海外）</option></select>
     </label>
-    <label>Seedream 模型 ID（留空用預設）<input id="setModel" type="text" placeholder="doubao-seedream-4-0-250828"></label>
-    <label class="direct-only">代理網址（選填，瀏覽器被擋時才需要）<input id="setRelay" type="url" placeholder="https://xxx.workers.dev"></label>
-    <p class="muted">金鑰只存在這支手機的瀏覽器裡，不會上傳到 GitHub。</p>
-    <div class="dlg-actions"><button value="cancel" class="ghost">取消</button><button id="btnSaveSettings" value="ok" class="primary">儲存</button></div>
+    <label>Seedream 模型 ID<input id="setModel" type="text" placeholder="留空用預設 doubao-seedream-4-0-250828"></label>
+    <label>DeepSeek API Key <em>選填</em><input id="setDeepseek" type="password" placeholder="sk-..."></label>
+    <label class="direct-only">代理網址 <em>選填，連線被擋時才需要</em><input id="setRelay" type="url" placeholder="https://xxx.workers.dev"></label>
+    <p class="note"><svg><use href="#i-shield"/></svg>金鑰只存在這支手機，不會上傳到 GitHub。</p>
+    <button id="btnSaveSettings" value="ok" class="btn btn-primary btn-block">儲存設定</button>
   </form>
 </dialog>
 

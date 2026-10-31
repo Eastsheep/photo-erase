@@ -289,6 +289,7 @@ const FAL_MODELS = {
 const GOOGLE_MODELS = {
   'gemini-nano-banana-2.1': 'Nano Banana 2.1',
   'gemini-3.1-flash-image': 'Nano Banana 2',
+  'gemini-3.1-flash-lite-image': 'Nano Banana 2 Lite',
   'gemini-3-pro-image': 'Nano Banana Pro',
   'gemini-2.5-flash-image': 'Nano Banana',
 };

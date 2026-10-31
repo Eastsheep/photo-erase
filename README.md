@@ -24,6 +24,7 @@ API 金鑰只存在你手機的瀏覽器（設定頁填入），由網頁直接�
 | --- | --- |
 | `gemini-nano-banana-2.1`（預設） | Nano Banana 2.1，Google 建議的新版 |
 | `gemini-3.1-flash-image` | Nano Banana 2，較快較省 |
+| `gemini-3.1-flash-lite-image` | Nano Banana 2 Lite，最快最便宜，只輸出 1K |
 | `gemini-3-pro-image` | Nano Banana Pro，最高畫質 |
 | `gemini-2.5-flash-image` | Nano Banana 舊版 |
 

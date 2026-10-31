@@ -356,7 +356,17 @@ async function inpaintGoogle({ image, marked, prompt }, key) {
     });
     if (fb.ok) res = fb;
   }
-  if (!res.ok) throw new Error(`Google Gemini 錯誤：${res.data?.error?.message || res.status}`);
+  if (!res.ok) {
+    const d = res.data || {};
+    const detail = d.error?.message || d.message || d.error?.status || (typeof d.error === 'string' ? d.error : '');
+    const hint = {
+      402: '這個 API Key 的專案尚未開通付費。圖片模型沒有免費額度，請到 Google AI Studio 的 Billing 綁定付款方式後再試。',
+      403: 'API Key 沒有權限，請確認 Key 正確且已啟用 Gemini API。',
+      429: '使用量超過上限，稍等一下再試，或到 AI Studio 提高額度。',
+      400: 'Google 拒絕了這個請求，可能是模型名稱或圖片格式問題。',
+    }[res.status] || '';
+    throw new Error(`Google Gemini ${res.status}${hint ? '：' + hint : ''}${detail ? `（${String(detail).slice(0, 160)}）` : ''}`);
+  }
   const img = findImage(res.data);
   if (!img) throw new Error('Gemini 沒有回傳圖片（可能被安全機制擋下，換個指令或圈選範圍再試）');
   return { image: `data:${img.mime};base64,${img.data}` };

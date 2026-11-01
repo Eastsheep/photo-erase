@@ -7,9 +7,6 @@
 
 const UPSTREAM = {
   deepseek: 'https://api.deepseek.com',
-  'ark-cn': 'https://ark.cn-beijing.volces.com/api/v3',
-  'ark-intl': 'https://ark.ap-southeast.bytepluses.com/api/v3',
-  fal: 'https://fal.run',
   google: 'https://generativelanguage.googleapis.com',
 };
 
@@ -35,11 +32,9 @@ export default {
     const [, service, ...rest] = url.pathname.split('/');
     const base = UPSTREAM[service];
     const path = '/' + rest.join('/');
-    const okPath = service === 'fal'
-      ? /^\/fal-ai\/[a-z0-9._\/-]+$/.test(path) && !path.includes('..')
-      : service === 'google'
+    const okPath = service === 'google'
       ? path === '/v1beta/interactions' || /^\/v1beta\/models\/[a-z0-9.-]+:generateContent$/.test(path)
-      : ['/chat/completions', '/images/generations'].includes(path);
+      : path === '/chat/completions';
     if (!base || !okPath) {
       return new Response('not found', { status: 404, headers: cors });
     }

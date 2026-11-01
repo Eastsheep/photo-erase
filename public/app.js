@@ -2,7 +2,6 @@
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 const MAX_SIDE = 2560;             // 編輯用工作解析度上限
-const TARGET_PIXELS = 2048 * 2048; // 送給 Seedream 的像素量（同時符合 4.0 / 4.5 下限）
 
 const store = {
   get(k, d = '') { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
@@ -12,7 +11,7 @@ const store = {
 const S = {
   W: 0, H: 0, base: null, mask: null, result: null, history: [],
   tool: 'lasso', drawing: false, pts: [], last: null,
-  mode: 'direct', screen: 'home', busy: false,
+  screen: 'home', busy: false,
   view: { z: 1, tx: 0, ty: 0, fit: 1 },
   pointers: new Map(), pinch: null, dragCompare: false, split: 0.5,
   instruction: '移除圈選範圍內的路人，自然補上背景',
@@ -220,35 +219,14 @@ function maskIsEmpty() {
 }
 function updateGo() { $('#btnGo').disabled = S.busy || maskIsEmpty(); }
 
-// ---------- 呼叫後端 ----------
-function headers() {
-  const h = { 'Content-Type': 'application/json' };
-  const pw = store.get('pe.password'); if (pw) h['X-App-Password'] = pw;
-  const dk = store.get('pe.deepseek'); if (dk) h['X-DeepSeek-Key'] = dk;
-  const ak = store.get('pe.ark'); if (ak) h['X-Ark-Key'] = ak;
-  const md = store.get('pe.model'); if (md) h['X-Seedream-Model'] = md;
-  return h;
-}
-async function api(path, body) {
-  const r = await fetch(path, { method: 'POST', headers: headers(), body: JSON.stringify(body) });
-  const data = await r.json().catch(() => ({ error: `伺服器回應異常 (${r.status})` }));
-  if (!r.ok) throw new Error(data.error || r.status);
-  return data;
-}
+// ---------- AI 服務：DeepSeek（優化指令，選填）+ Google Nano Banana（生圖） ----------
 function fallbackPrompt(instruction) {
   const want = (instruction || '移除路人與多餘物件').trim();
   return `請參考圖2中紅色標記的區域，對圖1的相同位置進行修改：${want}。以周圍環境的材質、光線、透視與陰影無縫自然地補全背景，不留任何殘影或輪廓；紅色區域以外的內容、構圖與色調完全保持不變；輸出為寫實照片，畫面中不得出現紅色遮罩或任何文字浮水印。`;
 }
-
-// ---------- 直連模式（GitHub Pages 等純靜態網站用，金鑰只存在這支手機） ----------
-const ARK_BASES = {
-  cn: 'https://ark.cn-beijing.volces.com/api/v3',
-  intl: 'https://ark.ap-southeast.bytepluses.com/api/v3',
-};
-const DEFAULT_MODEL = { cn: 'doubao-seedream-4-0-250828', intl: 'seedream-4-0-250828' };
-const SYSTEM_PROMPT = `你是專業的影像編輯提示詞工程師，負責為「Seedream」圖像編輯模型撰寫指令。
+const SYSTEM_PROMPT = `你是專業的影像編輯提示詞工程師，負責為 Google「Nano Banana」圖像編輯模型撰寫指令。
 情境：使用者會提供兩張圖。圖1 是原始照片；圖2 是同一張照片，但需要修改的區域被塗上了不透明的紅色遮罩。
-你的任務：把使用者簡短的需求，改寫成一段清楚、具體、可直接給 Seedream 的繁體中文編輯指令。
+你的任務：把使用者簡短的需求，改寫成一段清楚、具體、可直接給 Nano Banana 的繁體中文編輯指令。
 撰寫原則：
 1. 明確說明「依照圖2紅色標記的位置，修改圖1對應區域」。
 2. 若是移除（路人、物件、雜物、文字、電線等），要求以周圍環境（地面、牆面、天空、植物等的材質、光線、透視、陰影、雜訊顆粒）無縫自然地補全背景，不留殘影、輪廓或陰影。
@@ -257,37 +235,25 @@ const SYSTEM_PROMPT = `你是專業的影像編輯提示詞工程師，負責為
 只輸出最終指令本身，不要任何解釋、引號或前後綴，長度 80–200 字。`;
 
 function relayBase() { return store.get('pe.relay').replace(/\/+$/, ''); }
-function region() { return store.get('pe.region', 'cn') === 'intl' ? 'intl' : 'cn'; }
 function netError(what, e) {
   return new Error(`${what} 連線失敗（${e.message}）。若是被瀏覽器擋下（CORS），請在設定填入「代理網址」，見 README 的 Cloudflare Worker 說明`);
 }
-async function directJson(url, key, body, what, scheme = 'Bearer') {
-  let r;
-  try {
-    r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `${scheme} ${key}` }, body: JSON.stringify(body) });
-  } catch (e) { throw netError(what, e); }
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`${what} 錯誤：${data?.error?.message || (typeof data?.detail === 'string' ? data.detail : data?.detail?.[0]?.msg) || r.status}`);
-  return data;
-}
-async function enhanceDirect(instruction) {
+async function enhance(instruction) {
   const key = store.get('pe.deepseek');
   if (!key) return fallbackPrompt(instruction);
   const url = relayBase() ? `${relayBase()}/deepseek/chat/completions` : 'https://api.deepseek.com/chat/completions';
-  const data = await directJson(url, key, {
-    model: 'deepseek-chat', temperature: 0.4, max_tokens: 400,
-    messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: `使用者需求：${instruction || '移除圈選範圍內的路人與物件'}` }],
-  }, 'DeepSeek');
+  let r;
+  try {
+    r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({
+      model: 'deepseek-chat', temperature: 0.4, max_tokens: 400,
+      messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: `使用者需求：${instruction || '移除圈選範圍內的路人與物件'}` }],
+    }) });
+  } catch (e) { throw netError('DeepSeek', e); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`DeepSeek 錯誤：${data?.error?.message || r.status}`);
   return data?.choices?.[0]?.message?.content?.trim() || fallbackPrompt(instruction);
 }
-const FAL_MODELS = {
-  'fal-ai/flux-pro/v1/erase': 'FLUX 專業消除',
-  'fal-ai/qwen-image-2/pro/edit': 'Qwen Image 2.0 Pro',
-  'fal-ai/qwen-image-2/edit': 'Qwen Image 2.0',
-  'fal-ai/bytedance/seedream/v4.5/edit': 'Seedream 4.5',
-  'fal-ai/bytedance/seedream/v4/edit': 'Seedream 4.0',
-  'fal-ai/bria/eraser': 'Bria 專業消除',
-};
+
 const GOOGLE_MODELS = {
   'gemini-nano-banana-2.1': 'Nano Banana 2.1',
   'gemini-3.1-flash-image': 'Nano Banana 2',
@@ -295,13 +261,9 @@ const GOOGLE_MODELS = {
   'gemini-3-pro-image': 'Nano Banana Pro',
   'gemini-2.5-flash-image': 'Nano Banana',
 };
-function provider() { const p = store.get('pe.provider', 'google'); return ['google', 'fal', 'ark-cn', 'ark-intl'].includes(p) ? p : 'google'; }
 function googleModel() { const m = store.get('pe.googleModel'); return GOOGLE_MODELS[m] ? m : 'gemini-nano-banana-2.1'; }
-function genKey() { const p = provider(); return store.get(p === 'google' ? 'pe.google' : p === 'fal' ? 'pe.fal' : 'pe.ark'); }
-function falModel() { const m = store.get('pe.falModel'); return FAL_MODELS[m] ? m : 'fal-ai/flux-pro/v1/erase'; }
-const MASK_MODELS = ['fal-ai/flux-pro/v1/erase', 'fal-ai/bria/eraser'];
-function isEraser() { return provider() === 'fal' && MASK_MODELS.includes(falModel()); }
-function engineName() { const p = provider(); return p === 'google' ? GOOGLE_MODELS[googleModel()] : p === 'fal' ? FAL_MODELS[falModel()] : 'Seedream'; }
+function genKey() { return store.get('pe.google'); }
+function engineName() { return GOOGLE_MODELS[googleModel()]; }
 
 // ---------- Google Gemini（Nano Banana）----------
 const ASPECTS = ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
@@ -375,60 +337,8 @@ async function inpaintGoogle({ image, marked, prompt }, key) {
   return { image: `data:${img.mime};base64,${img.data}` };
 }
 
-async function inpaintDirect({ image, marked, mask, prompt, size }) {
-  const key = genKey();
-  if (!key) throw new Error('請先到「設定」填入生圖服務的 API Key');
-  const p = provider();
-  if (p === 'google') return inpaintGoogle({ image, marked, prompt }, key);
-  if (p === 'fal') {
-    const model = falModel();
-    const url = relayBase() ? `${relayBase()}/fal/${model}` : `https://fal.run/${model}`;
-    const [w, h] = size.split('x').map(Number);
-    const body = model === 'fal-ai/flux-pro/v1/erase'
-      ? { image_url: image, mask_url: mask, dilate_pixels: 10, sync_mode: true, output_format: 'jpeg' }
-      : model === 'fal-ai/bria/eraser'
-      ? { image_url: image, mask_url: mask, mask_type: 'manual', sync_mode: true }
-      : model.startsWith('fal-ai/qwen-image-2/')
-      ? { prompt, image_urls: [image, marked], image_size: sizeFor(2000 * 2000), num_images: 1, sync_mode: true, output_format: 'jpeg',
-          negative_prompt: '紅色遮罩, 紅色色塊, 殘影, 輪廓痕跡, 文字, 浮水印' }
-      : { prompt, image_urls: [image, marked], image_size: { width: w, height: h }, num_images: 1, sync_mode: true, enable_safety_checker: true };
-    const data = await directJson(url, key, body, engineName(), 'Key');
-    const out = data?.image?.url || data?.images?.[0]?.url;
-    if (!out) throw new Error(`${engineName()} 未回傳圖片`);
-    return { image: out };
-  }
-  const rg = p === 'ark-intl' ? 'intl' : 'cn';
-  const url = relayBase() ? `${relayBase()}/ark-${rg}/images/generations` : `${ARK_BASES[rg]}/images/generations`;
-  const data = await directJson(url, key, {
-    model: store.get('pe.model') || DEFAULT_MODEL[rg], prompt, image: [image, marked], size,
-    sequential_image_generation: 'disabled', response_format: 'b64_json', watermark: false,
-  }, 'Seedream');
-  const b64 = data?.data?.[0]?.b64_json;
-  if (!b64) throw new Error('Seedream 未回傳圖片');
-  return { image: `data:image/jpeg;base64,${b64}` };
-}
 
-// 依總像素量算出與照片同比例的寬高（16 的倍數）
-function sizeFor(pixels) {
-  const a = S.W / S.H; let w = Math.sqrt(pixels * a), h = w / a;
-  const f = v => Math.max(16, Math.floor(v / 16) * 16);
-  return { width: f(w), height: f(h) };
-}
-function seedreamSize() {
-  const a = S.W / S.H;
-  let w = Math.sqrt(TARGET_PIXELS * a), h = w / a;
-  const k = Math.min(1, 4096 / Math.max(w, h)); w *= k; h *= k;
-  const r16 = v => Math.max(16, Math.round(v / 16) * 16);
-  return `${r16(w)}x${r16(h)}`;
-}
-
-
-const backend = {
-  enhance: instruction => S.mode === 'server' ? api('api/enhance', { instruction }).then(d => d.prompt) : enhanceDirect(instruction),
-  inpaint: body => S.mode === 'server' ? api('api/inpaint', body) : inpaintDirect(body),
-};
-
-function loadImage(src) { return new Promise((ok, bad) => { const i = new Image(); if (/^https?:/.test(src)) i.crossOrigin = 'anonymous'; i.onload = () => ok(i); i.onerror = () => bad(new Error('結果圖片無法載入')); i.src = src; }); }
+function loadImage(src) { return new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error('結果圖片無法載入')); i.src = src; }); }
 
 // 把生成結果只貼回遮罩區域（邊緣羽化），遮罩外保留原圖像素
 function composite(genImg) {
@@ -456,31 +366,27 @@ function setBusy(on, step, text, sub = '') {
 
 $('#btnGo').onclick = async () => {
   if (maskIsEmpty()) return toast('請先用手指圈出要移除的範圍');
-  if (S.mode === 'direct' && !genKey()) { toast('請先填入生圖服務的 API Key'); return openSettings(); }
+  if (!genKey()) { toast('請先填入 Google Gemini API Key'); return openSettings(); }
   const custom = !$('#instruction').hidden;
   const instruction = custom ? ($('#instruction').value.trim() || S.instruction) : S.instruction;
   try {
     let prompt = fallbackPrompt(instruction);
-    if (!(S.mode === 'direct' && isEraser()) && $('#useDeepseek').checked && (S.mode === 'server' || store.get('pe.deepseek'))) {
+    if ($('#useDeepseek').checked && store.get('pe.deepseek')) {
       setBusy(true, 1, 'AI 正在理解你的需求', 'DeepSeek 優化修圖指令');
-      prompt = await backend.enhance(instruction);
+      prompt = await enhance(instruction);
     }
-    setBusy(true, 2, 'AI 正在補上背景', `${S.mode === 'direct' ? engineName() : 'Seedream'} 生成中，約 10–40 秒`);
+    setBusy(true, 2, 'AI 正在補上背景', `${engineName()} 生成中，約 10–40 秒`);
     const image = S.base.toDataURL('image/jpeg', 0.92);
     const marked = canvas(); const mc = marked.getContext('2d');
     mc.drawImage(S.base, 0, 0);
     const red = canvas(); const rc = red.getContext('2d'); rc.drawImage(S.mask, 0, 0);
     rc.globalCompositeOperation = 'source-in'; rc.fillStyle = '#ff0000'; rc.fillRect(0, 0, S.W, S.H);
     mc.drawImage(red, 0, 0);
-    const bw = canvas(); const bc = bw.getContext('2d'); bc.fillStyle = '#000'; bc.fillRect(0, 0, S.W, S.H);
-    const white = canvas(); const wc = white.getContext('2d'); wc.drawImage(S.mask, 0, 0);
-    wc.globalCompositeOperation = 'source-in'; wc.fillStyle = '#fff'; wc.fillRect(0, 0, S.W, S.H); bc.drawImage(white, 0, 0);
-    const res = await backend.inpaint({ image, marked: marked.toDataURL('image/jpeg', 0.92), mask: bw.toDataURL('image/png'), prompt, size: seedreamSize() });
+    const res = await inpaintGoogle({ image, marked: marked.toDataURL('image/jpeg', 0.92), prompt }, genKey());
     S.result = composite(await loadImage(res.image));
     S.split = 0.5;
-    $('#promptUsed').textContent = (S.mode === 'direct' && isEraser()) ? `${engineName()} 直接依照圈選範圍處理，不需要文字指令。` : prompt;
+    $('#promptUsed').textContent = prompt;
     showScreen('result'); render(); vibrate(20);
-    if (res.mock) toast('目前是 MOCK 測試模式，未真正呼叫生圖服務');
   } catch (err) {
     toast('失敗：' + err.message, 6000);
   } finally { setBusy(false); }
@@ -505,50 +411,23 @@ $('#btnSave').onclick = () => {
 };
 
 // ---------- 設定 ----------
-async function loadServerCfg() {
-  let c = null;
-  try {
-    const r = await fetch('api/config');
-    c = r.ok && (r.headers.get('content-type') || '').includes('json') ? await r.json() : null;
-  } catch { c = null; }
-  S.mode = c ? 'server' : 'direct';
-  $$('.server-only').forEach(el => el.hidden = S.mode !== 'server');
-  $$('.direct-only').forEach(el => el.hidden = S.mode !== 'direct');
-  if (!c) {
-    $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}` : '第一次使用：填入 Google Gemini API Key 就能開始。';
-    return;
-  }
-  $('#serverStatus').textContent = c.mock ? '伺服器：MOCK 測試模式'
-    : `伺服器金鑰：DeepSeek ${c.hasDeepseekKey ? '✓' : '✗'}　Seedream ${c.hasArkKey ? '✓' : '✗'}　模型 ${c.model || '-'}`;
-  if (c.needPassword && !store.get('pe.password')) openSettings();
+function updateStatus() {
+  $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}${store.get('pe.deepseek') ? ' + DeepSeek' : ''}` : '第一次使用：填入 Google Gemini API Key 就能開始。';
 }
 function openSettings() {
-  $('#setPassword').value = store.get('pe.password'); $('#setDeepseek').value = store.get('pe.deepseek');
-  $('#setArk').value = store.get('pe.ark'); $('#setModel').value = store.get('pe.model');
-  $('#setProvider').value = provider(); $('#setGoogle').value = store.get('pe.google'); $('#setGoogleModel').value = googleModel();
-  $('#setFal').value = store.get('pe.fal'); $('#setFalModel').value = falModel();
-  $('#setRelay').value = store.get('pe.relay'); syncProviderFields();
-  $('#settings').showModal();
+  $('#setGoogle').value = store.get('pe.google'); $('#setGoogleModel').value = googleModel();
+  $('#setDeepseek').value = store.get('pe.deepseek'); $('#setRelay').value = store.get('pe.relay');
+  updateStatus(); $('#settings').showModal();
 }
 $('#btnSettings').onclick = openSettings;
-function syncProviderFields() {
-  const p = $('#setProvider').value, direct = S.mode === 'direct';
-  $$('.google-only').forEach(el => el.hidden = !direct || p !== 'google');
-  $$('.fal-only').forEach(el => el.hidden = !direct || p !== 'fal');
-  $$('.ark-only').forEach(el => el.hidden = direct && !p.startsWith('ark'));
-}
-$('#setProvider').addEventListener('change', syncProviderFields);
 $('#settings').addEventListener('click', e => { if (e.target === $('#settings')) $('#settings').close('cancel'); });
 $('#settings').addEventListener('close', () => {
   if ($('#settings').returnValue !== 'ok') return;
-  store.set('pe.password', $('#setPassword').value.trim()); store.set('pe.deepseek', $('#setDeepseek').value.trim());
-  store.set('pe.ark', $('#setArk').value.trim()); store.set('pe.model', $('#setModel').value.trim());
-  store.set('pe.provider', $('#setProvider').value); store.set('pe.google', $('#setGoogle').value.trim()); store.set('pe.googleModel', $('#setGoogleModel').value); store.set('pe.fal', $('#setFal').value.trim()); store.set('pe.falModel', $('#setFalModel').value);
-  store.set('pe.relay', $('#setRelay').value.trim());
-  if (S.mode === 'direct') $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}` : '第一次使用：填入 Google Gemini API Key 就能開始。';
-  toast('設定已儲存');
+  store.set('pe.google', $('#setGoogle').value.trim()); store.set('pe.googleModel', $('#setGoogleModel').value);
+  store.set('pe.deepseek', $('#setDeepseek').value.trim()); store.set('pe.relay', $('#setRelay').value.trim());
+  updateStatus(); toast('設定已儲存');
 });
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 showScreen('home');
-loadServerCfg();
+updateStatus();

@@ -270,7 +270,12 @@ const QWEN_MODELS = {
   'qwen-image-2.0': 'Qwen Image 2.0',
 };
 const QWEN_BASE = 'https://ap-southeast-1.maas.qwencloudapi.com'; // Qwen Cloud 新加坡區
-function engine() { return store.get('pe.engine', 'qwen') === 'google' ? 'google' : 'qwen'; }
+function engine() {
+  const e = store.get('pe.engine');
+  if (e === 'google' || e === 'qwen') return e;
+  // 沒選過引擎：已有 Gemini Key、沒有 Qwen Key 的舊使用者沿用 Nano Banana
+  return store.get('pe.google') && !store.get('pe.qwen') ? 'google' : 'qwen';
+}
 function qwenModel() { const m = store.get('pe.qwenModel'); return QWEN_MODELS[m] ? m : 'qwen-image-3.0-pro'; }
 function genKey() { return store.get(engine() === 'qwen' ? 'pe.qwen' : 'pe.google'); }
 function engineName() { return engine() === 'qwen' ? QWEN_MODELS[qwenModel()] : GOOGLE_MODELS[googleModel()]; }
@@ -463,6 +468,7 @@ $('#btnSave').onclick = () => {
 
 // ---------- 設定 ----------
 function updateStatus() {
+  $('#featureEngine').textContent = `${store.get('pe.deepseek') ? 'DeepSeek 優化指令，' : ''}${engine() === 'qwen' ? 'Qwen Image' : 'Google Nano Banana'} 生成`;
   $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}${store.get('pe.deepseek') ? ' + DeepSeek' : ''}` : `第一次使用：填入 ${keyLabel()} 就能開始。`;
 }
 function openSettings() {

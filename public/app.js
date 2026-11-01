@@ -327,8 +327,9 @@ async function inpaintOpenRouter({ image, marked, prompt }, key) {
   };
   const aspect = nearestAspect();
   // 1) 新版專用圖片端點
-  let res = await post('/images', { model, prompt, input_references: [image, marked], aspect_ratio: aspect, n: 1 });
-  if (!res.ok && res.status === 400) res = await post('/images', { model, prompt, input_references: [image, marked], n: 1 });
+  const ref = url => ({ type: 'image_url', image_url: { url } });
+  let res = await post('/images', { model, prompt, input_references: [ref(image), ref(marked)], aspect_ratio: aspect, n: 1 });
+  if (!res.ok && res.status === 400) res = await post('/images', { model, prompt, input_references: [ref(image), ref(marked)], n: 1 });
   // 2) 退回 chat completions 的圖片輸出
   if (!res.ok && [400, 404, 405].includes(res.status)) {
     const fb = await post('/chat/completions', {

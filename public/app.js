@@ -282,6 +282,8 @@ async function enhanceDirect(instruction) {
 }
 const FAL_MODELS = {
   'fal-ai/flux-pro/v1/erase': 'FLUX 專業消除',
+  'fal-ai/qwen-image-2/pro/edit': 'Qwen Image 2.0 Pro',
+  'fal-ai/qwen-image-2/edit': 'Qwen Image 2.0',
   'fal-ai/bytedance/seedream/v4.5/edit': 'Seedream 4.5',
   'fal-ai/bytedance/seedream/v4/edit': 'Seedream 4.0',
   'fal-ai/bria/eraser': 'Bria 專業消除',
@@ -386,6 +388,9 @@ async function inpaintDirect({ image, marked, mask, prompt, size }) {
       ? { image_url: image, mask_url: mask, dilate_pixels: 10, sync_mode: true, output_format: 'jpeg' }
       : model === 'fal-ai/bria/eraser'
       ? { image_url: image, mask_url: mask, mask_type: 'manual', sync_mode: true }
+      : model.startsWith('fal-ai/qwen-image-2/')
+      ? { prompt, image_urls: [image, marked], image_size: sizeFor(2000 * 2000), num_images: 1, sync_mode: true, output_format: 'jpeg',
+          negative_prompt: '紅色遮罩, 紅色色塊, 殘影, 輪廓痕跡, 文字, 浮水印' }
       : { prompt, image_urls: [image, marked], image_size: { width: w, height: h }, num_images: 1, sync_mode: true, enable_safety_checker: true };
     const data = await directJson(url, key, body, engineName(), 'Key');
     const out = data?.image?.url || data?.images?.[0]?.url;
@@ -403,6 +408,12 @@ async function inpaintDirect({ image, marked, mask, prompt, size }) {
   return { image: `data:image/jpeg;base64,${b64}` };
 }
 
+// 依總像素量算出與照片同比例的寬高（16 的倍數）
+function sizeFor(pixels) {
+  const a = S.W / S.H; let w = Math.sqrt(pixels * a), h = w / a;
+  const f = v => Math.max(16, Math.floor(v / 16) * 16);
+  return { width: f(w), height: f(h) };
+}
 function seedreamSize() {
   const a = S.W / S.H;
   let w = Math.sqrt(TARGET_PIXELS * a), h = w / a;

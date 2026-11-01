@@ -29,7 +29,7 @@ API 金鑰只存在你手機的瀏覽器（設定頁填入），由網頁直接�
 | `gemini-2.5-flash-image` | Nano Banana 舊版 |
 
 呼叫 Google 的 Interactions API（`/v1beta/interactions`），不支援時自動退回 `generateContent`。結果只貼回圈選範圍。
-進階選項仍保留 fal.ai 與火山方舟 / BytePlus。DeepSeek Key 選填。
+fal.ai 另提供 **Qwen Image 2.0 / 2.0 Pro**（`fal-ai/qwen-image-2/edit`、`fal-ai/qwen-image-2/pro/edit`）、FLUX 專業消除、Seedream、Bria；進階選項仍保留 fal.ai 與火山方舟 / BytePlus。DeepSeek Key 選填。
 
 ### 如果出現「連線失敗…CORS」
 

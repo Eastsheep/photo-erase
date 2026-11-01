@@ -189,7 +189,13 @@
   <form method="dialog">
     <div class="sheet-grip"></div>
     <div class="sheet-head"><h2>用量統計</h2><button value="cancel" class="icon-btn" aria-label="關閉"><svg><use href="#i-x"/></svg></button></div>
-    <div class="u-cards"><div class="u-card" id="usageToday"></div><div class="u-card" id="usageMonth"></div></div>
+    <div id="orOfficial" class="u-official" hidden>
+      <div class="u-sec"><span>OpenRouter 官方帳單（這把 Key）</span><button id="btnOrKeyRefresh" type="button" class="u-link">重新整理</button></div>
+      <div class="u-grid" id="orKeyGrid"></div>
+      <small class="field-hint" id="orKeyHint"></small>
+    </div>
+    <div class="u-sec"><span>本機紀錄（這支手機）</span></div>
+    <div class="u-cards u-cards-local"><div class="u-card" id="usageToday"></div><div class="u-card" id="usageMonth"></div></div>
     <label>依模型分組
       <select id="usageRange"><option value="month">本月</option><option value="today">今天</option><option value="all">全部</option></select>
     </label>

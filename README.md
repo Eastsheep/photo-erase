@@ -27,7 +27,7 @@ App 右上角「設定」：
 
 金鑰只存在你的手機瀏覽器，不會進到 repo。
 
-**用量統計**：設定頁的「用量統計」會記錄每次修圖的模型、tokens 與花費（OpenRouter 取回應的 `usage.cost`，沒有時用 `/api/v1/generation` 回查；DeepSeek 記 tokens；Qwen、Google 只記次數），可看今天／本月合計、依模型分組，並匯出 CSV。紀錄只存在這支手機的瀏覽器。
+**用量統計**：設定頁的「用量統計」上方顯示 OpenRouter 官方的今天／本週／本月／累計花費與額度（`GET /api/v1/key`，用一般 Key 即可），下方是本機紀錄：記錄每次修圖的模型、tokens 與花費（OpenRouter 取回應的 `usage.cost`，沒有時用 `/api/v1/generation` 回查；DeepSeek 記 tokens；Qwen、Google 只記次數），可看今天／本月合計、依模型分組，並匯出 CSV。紀錄只存在這支手機的瀏覽器。
 
 **Qwen Cloud**：呼叫 `https://ap-southeast-1.maas.qwencloudapi.com/api/v1/services/aigc/multimodal-generation/generation`。模型：`qwen-image-3.0-pro`（預設）、`qwen-image-2.1-pro`、`qwen-image-2.1-turbo`、`qwen-image-2.0-pro`、`qwen-image-2.0`。回傳的圖片網址 24 小時內有效，App 會立即下載。
 

@@ -382,9 +382,30 @@ function logOrUsage(d, model, key) {
     } catch {}
   }, 2500);
 }
-const fmtUSD = n => n == null ? '—' : '$' + (n < 0.01 && n > 0 ? n.toFixed(5) : n.toFixed(3));
+const fmtUSD = n => n == null ? '—' : '$' + (n >= 1 || n === 0 ? n.toFixed(2) : n < 0.01 ? n.toFixed(5) : n.toFixed(3));
 const fmtNum = n => (n || 0).toLocaleString('en-US');
 function usageRange() { return $('#usageRange').value; }
+// OpenRouter 官方：GET /api/v1/key 回傳這把 Key 今天／本週／本月／累計花費與額度
+async function loadOrKey() {
+  const key = store.get('pe.openrouter'), box = $('#orOfficial');
+  box.hidden = !key; if (!key) return;
+  const grid = $('#orKeyGrid'), hint = $('#orKeyHint');
+  hint.textContent = '讀取中…';
+  try {
+    const r = await fetch(`${OR_BASE}/key`, { headers: orHeaders(key) });
+    const d = (await r.json().catch(() => ({})))?.data;
+    if (!r.ok || !d) throw new Error(r.status === 401 ? 'Key 錯誤' : r.status);
+    const cell = (v, t) => `<div class="u-cell"><b>${fmtUSD(v ?? 0)}</b><span>${t}</span></div>`;
+    grid.innerHTML = cell(d.usage_daily, '今天') + cell(d.usage_weekly, '本週') + cell(d.usage_monthly, '本月') + cell(d.usage, '累計');
+    const reset = { daily: '每日', weekly: '每週', monthly: '每月' }[d.limit_reset] || '';
+    hint.textContent = (d.limit != null
+      ? `額度上限 ${fmtUSD(d.limit)}${reset ? `（${reset}重置）` : ''}，剩餘 ${fmtUSD(d.limit_remaining)}。`
+      : '這把 Key 沒有設額度上限，可到 openrouter.ai/keys 設定。')
+      + '日／週／月以 UTC 時間計算。';
+  } catch (e) {
+    grid.innerHTML = ''; hint.textContent = `讀取官方用量失敗（${e.message}），請確認網路或 Key。`;
+  }
+}
 function renderUsage() {
   const all = usageLog(); const now = new Date();
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -650,7 +671,8 @@ async function loadOrModels() {
     $('#orHint').textContent = `讀取模型清單失敗（${e.message}），請確認網路或 Key`;
   } finally { btn.disabled = false; btn.textContent = '更新清單'; }
 }
-$('#btnUsage').addEventListener('click', e => { e.preventDefault(); $('#settings').close('cancel'); renderUsage(); $('#usage').showModal(); });
+$('#btnUsage').addEventListener('click', e => { e.preventDefault(); $('#settings').close('cancel'); renderUsage(); loadOrKey(); $('#usage').showModal(); });
+$('#btnOrKeyRefresh').addEventListener('click', e => { e.preventDefault(); loadOrKey(); });
 $('#usageRange').addEventListener('change', renderUsage);
 $('#btnUsageCsv').addEventListener('click', e => { e.preventDefault(); exportUsage(); });
 $('#btnUsageClear').addEventListener('click', e => { e.preventDefault(); if (confirm('確定清除這支手機上的所有用量紀錄？')) { saveUsage([]); renderUsage(); } });

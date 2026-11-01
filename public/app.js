@@ -690,6 +690,20 @@ $('#settings').addEventListener('close', () => {
   updateStatus(); toast('設定已儲存');
 });
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+// 自動更新：每次回到 App 都檢查新版；新版接手時若不在編輯中就重新載入
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    setInterval(check, 30 * 60 * 1000);
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    if (S.screen === 'home' && !S.busy) { reloaded = true; location.reload(); }
+    else toast('有新版本，下次開啟 App 時會套用');
+  });
+}
 showScreen('home');
 updateStatus();

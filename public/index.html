@@ -148,6 +148,7 @@
       <select id="setEngine">
         <option value="qwen">Qwen Cloud · Qwen Image（預設）</option>
         <option value="google">Google · Nano Banana</option>
+        <option value="openrouter">OpenRouter · 自選模型</option>
       </select>
     </label>
     <label class="qwen-only">Qwen Cloud API Key <em>新加坡區</em><input id="setQwen" type="password" placeholder="sk-..."></label>
@@ -159,6 +160,11 @@
         <option value="qwen-image-2.0-pro">Qwen Image 2.0 Pro</option>
         <option value="qwen-image-2.0">Qwen Image 2.0（較便宜）</option>
       </select>
+    </label>
+    <label class="or-only">OpenRouter API Key<input id="setOr" type="password" placeholder="sk-or-..."></label>
+    <label class="or-only">模型
+      <div class="row-inline"><select id="setOrModel"></select><button id="btnOrRefresh" type="button" class="btn btn-glass btn-sm">更新清單</button></div>
+      <small id="orHint" class="field-hint">清單只列出能「輸入圖片＋輸出圖片」的模型</small>
     </label>
     <label class="google-only">Google Gemini API Key<input id="setGoogle" type="password" placeholder="在 aistudio.google.com/apikey 建立"></label>
     <label class="google-only">模型

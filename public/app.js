@@ -272,14 +272,84 @@ const QWEN_MODELS = {
 const QWEN_BASE = 'https://ap-southeast-1.maas.qwencloudapi.com'; // Qwen Cloud 新加坡區
 function engine() {
   const e = store.get('pe.engine');
-  if (e === 'google' || e === 'qwen') return e;
+  if (e === 'google' || e === 'qwen' || e === 'openrouter') return e;
   // 沒選過引擎：已有 Gemini Key、沒有 Qwen Key 的舊使用者沿用 Nano Banana
   return store.get('pe.google') && !store.get('pe.qwen') ? 'google' : 'qwen';
 }
 function qwenModel() { const m = store.get('pe.qwenModel'); return QWEN_MODELS[m] ? m : 'qwen-image-3.0-pro'; }
-function genKey() { return store.get(engine() === 'qwen' ? 'pe.qwen' : 'pe.google'); }
-function engineName() { return engine() === 'qwen' ? QWEN_MODELS[qwenModel()] : GOOGLE_MODELS[googleModel()]; }
-function keyLabel() { return engine() === 'qwen' ? 'Qwen Cloud API Key' : 'Google Gemini API Key'; }
+const ENGINES = {
+  qwen: { key: 'pe.qwen', label: 'Qwen Cloud API Key', brand: 'Qwen Image' },
+  google: { key: 'pe.google', label: 'Google Gemini API Key', brand: 'Google Nano Banana' },
+  openrouter: { key: 'pe.openrouter', label: 'OpenRouter API Key', brand: 'OpenRouter' },
+};
+function genKey() { return store.get(ENGINES[engine()].key); }
+function engineName() {
+  const e = engine();
+  return e === 'qwen' ? QWEN_MODELS[qwenModel()] : e === 'google' ? GOOGLE_MODELS[googleModel()] : (store.get('pe.orModelName') || orModel() || 'OpenRouter');
+}
+function keyLabel() { return ENGINES[engine()].label; }
+
+// ---------- OpenRouter（可選任一支援「圖片輸入 + 圖片輸出」的模型）----------
+const OR_BASE = 'https://openrouter.ai/api/v1';
+function orModel() { return store.get('pe.orModel'); }
+function orHeaders(key) {
+  const h = { 'Content-Type': 'application/json', 'HTTP-Referer': location.origin + location.pathname, 'X-Title': 'Photo Erase' };
+  if (key) h.Authorization = `Bearer ${key}`;
+  return h;
+}
+// 抓模型清單：只留可以吃圖片、也能輸出圖片的（才能修圖）
+async function fetchOrModels(key) {
+  const tryGet = async path => { const r = await fetch(OR_BASE + path, { headers: orHeaders(key) }); if (!r.ok) throw new Error(r.status); return (await r.json()).data || []; };
+  let list;
+  try { list = await tryGet('/images/models'); } catch { list = await tryGet('/models?output_modalities=image'); }
+  const canEdit = m => {
+    const a = m.architecture || {};
+    const inp = a.input_modalities || [], out = a.output_modalities || [];
+    return out.includes('image') && (inp.length === 0 || inp.includes('image'));
+  };
+  return list.filter(canEdit).map(m => ({ id: m.id, name: m.name || m.id })).sort((a, b) => a.name.localeCompare(b.name));
+}
+function extractOrImage(d) {
+  const b = d?.data?.[0];
+  if (b?.b64_json) return `data:${b.media_type || 'image/png'};base64,${b.b64_json}`;
+  if (b?.url) return b.url;
+  const img = d?.choices?.[0]?.message?.images?.[0];
+  return img?.image_url?.url || img?.url || null;
+}
+async function inpaintOpenRouter({ image, marked, prompt }, key) {
+  const model = orModel();
+  if (!model) throw new Error('請先到設定選擇 OpenRouter 模型');
+  const post = async (path, body) => {
+    let r;
+    try { r = await fetch(OR_BASE + path, { method: 'POST', headers: orHeaders(key), body: JSON.stringify(body) }); }
+    catch (e) { throw netError('OpenRouter', e); }
+    return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
+  };
+  const aspect = nearestAspect();
+  // 1) 新版專用圖片端點
+  let res = await post('/images', { model, prompt, input_references: [image, marked], aspect_ratio: aspect, n: 1 });
+  if (!res.ok && res.status === 400) res = await post('/images', { model, prompt, input_references: [image, marked], n: 1 });
+  // 2) 退回 chat completions 的圖片輸出
+  if (!res.ok && [400, 404, 405].includes(res.status)) {
+    const fb = await post('/chat/completions', {
+      model, modalities: ['image', 'text'],
+      messages: [{ role: 'user', content: [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: image } },
+        { type: 'image_url', image_url: { url: marked } },
+      ] }],
+    });
+    if (fb.ok) res = fb;
+  }
+  if (!res.ok) {
+    const hint = { 401: 'API Key 錯誤。', 402: 'OpenRouter 餘額不足，請到 openrouter.ai/credits 儲值。', 429: '請求太頻繁，稍後再試。' }[res.status] || '';
+    const msg = res.data?.error?.message || res.data?.message || '';
+    throw new Error(`OpenRouter ${res.status}${hint ? '：' + hint : ''}${msg ? `（${String(msg).slice(0, 160)}）` : ''}`);
+  }
+  const out = extractOrImage(res.data);
+  if (!out) throw new Error('這個模型沒有回傳圖片，請換一個模型試試');
+  return { image: out.startsWith('data:') ? out : await fetchAsDataURL(out) };
+}
 
 // ---------- Google Gemini（Nano Banana）----------
 const ASPECTS = ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
@@ -438,7 +508,8 @@ $('#btnGo').onclick = async () => {
     rc.globalCompositeOperation = 'source-in'; rc.fillStyle = '#ff0000'; rc.fillRect(0, 0, S.W, S.H);
     mc.drawImage(red, 0, 0);
     const body = { image, marked: marked.toDataURL('image/jpeg', 0.92), prompt, enhanced };
-    const res = engine() === 'qwen' ? await inpaintQwen(body, genKey()) : await inpaintGoogle(body, genKey());
+    const e = engine();
+    const res = e === 'qwen' ? await inpaintQwen(body, genKey()) : e === 'openrouter' ? await inpaintOpenRouter(body, genKey()) : await inpaintGoogle(body, genKey());
     S.result = composite(await loadImage(res.image));
     S.split = 0.5;
     $('#promptUsed').textContent = prompt;
@@ -468,26 +539,52 @@ $('#btnSave').onclick = () => {
 
 // ---------- 設定 ----------
 function updateStatus() {
-  $('#featureEngine').textContent = `${store.get('pe.deepseek') ? 'DeepSeek 優化指令，' : ''}${engine() === 'qwen' ? 'Qwen Image' : 'Google Nano Banana'} 生成`;
+  $('#featureEngine').textContent = `${store.get('pe.deepseek') ? 'DeepSeek 優化指令，' : ''}${engine() === 'openrouter' ? engineName() : ENGINES[engine()].brand} 生成`;
   $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}${store.get('pe.deepseek') ? ' + DeepSeek' : ''}` : `第一次使用：填入 ${keyLabel()} 就能開始。`;
 }
 function openSettings() {
   $('#setEngine').value = engine(); $('#setQwen').value = store.get('pe.qwen'); $('#setQwenModel').value = qwenModel();
-  $('#setGoogle').value = store.get('pe.google'); $('#setGoogleModel').value = googleModel(); syncEngine();
+  $('#setGoogle').value = store.get('pe.google'); $('#setGoogleModel').value = googleModel();
+  $('#setOr').value = store.get('pe.openrouter'); fillOrSelect(); syncEngine();
   $('#setDeepseek').value = store.get('pe.deepseek'); $('#setRelay').value = store.get('pe.relay');
   updateStatus(); $('#settings').showModal();
 }
 $('#btnSettings').onclick = openSettings;
 function syncEngine() {
-  const q = $('#setEngine').value === 'qwen';
-  $$('.qwen-only').forEach(el => el.hidden = !q); $$('.google-only').forEach(el => el.hidden = q);
+  const e = $('#setEngine').value;
+  $$('.qwen-only').forEach(el => el.hidden = e !== 'qwen');
+  $$('.google-only').forEach(el => el.hidden = e !== 'google');
+  $$('.or-only').forEach(el => el.hidden = e !== 'openrouter');
+  if (e === 'openrouter' && !orCache().length && $('#setOr').value.trim()) loadOrModels();
 }
+function orCache() { try { return JSON.parse(store.get('pe.orModels', '[]')); } catch { return []; } }
+function fillOrSelect() {
+  const sel = $('#setOrModel'); const list = orCache(); const cur = orModel();
+  sel.innerHTML = '';
+  if (!list.length && !cur) { sel.add(new Option('（先填 Key，再按「更新清單」）', '')); return; }
+  if (cur && !list.some(m => m.id === cur)) sel.add(new Option(store.get('pe.orModelName') || cur, cur));
+  list.forEach(m => sel.add(new Option(m.name, m.id)));
+  sel.value = cur || list[0]?.id || '';
+}
+async function loadOrModels() {
+  const btn = $('#btnOrRefresh'); btn.disabled = true; btn.textContent = '讀取中…';
+  try {
+    const list = await fetchOrModels($('#setOr').value.trim());
+    store.set('pe.orModels', JSON.stringify(list)); fillOrSelect();
+    $('#orHint').textContent = `找到 ${list.length} 個可修圖的模型（可輸入圖片、輸出圖片）`;
+  } catch (e) {
+    $('#orHint').textContent = `讀取模型清單失敗（${e.message}），請確認網路或 Key`;
+  } finally { btn.disabled = false; btn.textContent = '更新清單'; }
+}
+$('#btnOrRefresh').addEventListener('click', e => { e.preventDefault(); loadOrModels(); });
 $('#setEngine').addEventListener('change', syncEngine);
 $('#settings').addEventListener('click', e => { if (e.target === $('#settings')) $('#settings').close('cancel'); });
 $('#settings').addEventListener('close', () => {
   if ($('#settings').returnValue !== 'ok') return;
   store.set('pe.engine', $('#setEngine').value); store.set('pe.qwen', $('#setQwen').value.trim()); store.set('pe.qwenModel', $('#setQwenModel').value);
   store.set('pe.google', $('#setGoogle').value.trim()); store.set('pe.googleModel', $('#setGoogleModel').value);
+  const orSel = $('#setOrModel'); store.set('pe.openrouter', $('#setOr').value.trim());
+  if (orSel.value) { store.set('pe.orModel', orSel.value); store.set('pe.orModelName', orSel.selectedOptions[0]?.text || orSel.value); }
   store.set('pe.deepseek', $('#setDeepseek').value.trim()); store.set('pe.relay', $('#setRelay').value.trim());
   updateStatus(); toast('設定已儲存');
 });

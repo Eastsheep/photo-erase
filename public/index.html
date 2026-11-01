@@ -33,6 +33,7 @@
     <symbol id="i-fit" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
     <symbol id="i-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0v0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
   </defs>
 </svg>
@@ -144,6 +145,7 @@
     <div class="sheet-grip"></div>
     <div class="sheet-head"><h2>設定</h2><button value="cancel" class="icon-btn" aria-label="關閉"><svg><use href="#i-x"/></svg></button></div>
     <p class="status" id="serverStatus"></p>
+    <button id="btnUsage" type="button" class="btn btn-glass btn-block btn-usage"><svg><use href="#i-chart"/></svg>用量統計（tokens／花費）</button>
     <label>修圖引擎
       <select id="setEngine">
         <option value="qwen">Qwen Cloud · Qwen Image（預設）</option>
@@ -180,6 +182,20 @@
     <label>代理網址 <em>選填，連線被擋時才需要</em><input id="setRelay" type="url" placeholder="https://xxx.workers.dev"></label>
     <p class="note"><svg><use href="#i-shield"/></svg>金鑰只存在這支手機，不會上傳到 GitHub。</p>
     <button id="btnSaveSettings" value="ok" class="btn btn-primary btn-block">儲存設定</button>
+  </form>
+</dialog>
+
+<dialog id="usage" class="sheet">
+  <form method="dialog">
+    <div class="sheet-grip"></div>
+    <div class="sheet-head"><h2>用量統計</h2><button value="cancel" class="icon-btn" aria-label="關閉"><svg><use href="#i-x"/></svg></button></div>
+    <div class="u-cards"><div class="u-card" id="usageToday"></div><div class="u-card" id="usageMonth"></div></div>
+    <label>依模型分組
+      <select id="usageRange"><option value="month">本月</option><option value="today">今天</option><option value="all">全部</option></select>
+    </label>
+    <div id="usageRows" class="u-rows"></div>
+    <p class="field-hint">花費來自 OpenRouter 回傳的實際金額（美元）；Qwen、Google 只記次數，費用請看各自後台。紀錄只存在這支手機。</p>
+    <div class="row-inline u-actions"><button id="btnUsageCsv" type="button" class="btn btn-glass btn-sm">匯出 CSV</button><button id="btnUsageClear" type="button" class="btn btn-glass btn-sm">清除紀錄</button></div>
   </form>
 </dialog>
 

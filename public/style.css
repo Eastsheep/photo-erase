@@ -159,3 +159,21 @@ input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;bac
 .row-inline{display:flex;gap:8px}.row-inline select{flex:1;min-width:0}
 .btn-sm{height:46px;padding:0 14px;font-size:14px;border-radius:12px;flex:none}
 .field-hint{color:var(--muted);font-size:12px;font-weight:400}
+
+/* 用量統計 */
+.sheet{overflow-y:auto}
+.btn-usage{margin-top:2px;font-size:14px;height:44px}
+.btn-usage svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.u-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 4px}
+.u-card{background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:4px}
+.u-card b{font-size:22px;background:linear-gradient(90deg,#ff4d6d,#ff9f43);-webkit-background-clip:text;background-clip:text;color:transparent}
+.u-card span{font-size:12px;color:var(--muted)}
+.u-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.u-row{display:flex;justify-content:space-between;gap:12px;background:var(--glass);border-radius:12px;padding:10px 12px}
+.u-name,.u-num{display:flex;flex-direction:column;gap:3px;min-width:0}
+.u-num{text-align:right;flex:none}
+.u-name b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.u-row small{font-size:12px;color:var(--muted)}
+.u-num b{font-size:15px}
+.u-empty{text-align:center;padding:16px 0}
+.u-actions{margin-top:12px}.u-actions .btn{flex:1}

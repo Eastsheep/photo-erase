@@ -251,6 +251,7 @@ async function enhance(instruction) {
   } catch (e) { throw netError('DeepSeek', e); }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`DeepSeek 錯誤：${data?.error?.message || r.status}`);
+  if (data.usage) logUsage({ engine: 'deepseek', model: 'deepseek-chat', ...tokensOf(data.usage) });
   return data?.choices?.[0]?.message?.content?.trim() || fallbackPrompt(instruction);
 }
 
@@ -339,6 +340,7 @@ async function inpaintOpenRouter({ image, marked, prompt }, key) {
         { type: 'image_url', image_url: { url: image } },
         { type: 'image_url', image_url: { url: marked } },
       ] }],
+      usage: { include: true },
     });
     if (fb.ok) res = fb;
   }
@@ -349,7 +351,76 @@ async function inpaintOpenRouter({ image, marked, prompt }, key) {
   }
   const out = extractOrImage(res.data);
   if (!out) throw new Error('這個模型沒有回傳圖片，請換一個模型試試');
+  logOrUsage(res.data, model, key);
   return { image: out.startsWith('data:') ? out : await fetchAsDataURL(out) };
+}
+
+// ---------- 用量紀錄（存在這支手機）----------
+const USAGE_MAX = 3000;
+function usageLog() { try { return JSON.parse(store.get('pe.usage', '[]')); } catch { return []; } }
+function saveUsage(list) { store.set('pe.usage', JSON.stringify(list.slice(-USAGE_MAX))); }
+function tokensOf(u = {}) {
+  const pt = u.prompt_tokens ?? u.input_tokens ?? 0, ct = u.completion_tokens ?? u.output_tokens ?? 0;
+  return { pt, ct, tt: u.total_tokens ?? pt + ct, cost: typeof u.cost === 'number' ? u.cost : null };
+}
+function logUsage(e) {
+  const entry = { t: Date.now(), id: Math.random().toString(36).slice(2, 10), pt: 0, ct: 0, tt: 0, cost: null, ...e };
+  const list = usageLog(); list.push(entry); saveUsage(list); return entry.id;
+}
+function patchUsage(id, patch) { const list = usageLog(); const e = list.find(x => x.id === id); if (e) { Object.assign(e, patch); saveUsage(list); } }
+// OpenRouter：回應帶 usage（tokens、cost）；沒附 cost 時用 generation id 回查
+function logOrUsage(d, model, key) {
+  const name = store.get('pe.orModel') === model ? (store.get('pe.orModelName') || model) : model;
+  const id = logUsage({ engine: 'openrouter', model, name, ...tokensOf(d?.usage) });
+  const gid = d?.id;
+  if (d?.usage?.cost == null && gid) setTimeout(async () => {
+    try {
+      const r = await fetch(`${OR_BASE}/generation?id=${encodeURIComponent(gid)}`, { headers: orHeaders(key) });
+      const g = (await r.json())?.data; if (!g) return;
+      const pt = g.native_tokens_prompt ?? g.tokens_prompt, ct = g.native_tokens_completion ?? g.tokens_completion;
+      patchUsage(id, { cost: g.total_cost ?? null, ...(pt != null ? { pt, ct: ct || 0, tt: pt + (ct || 0) } : {}) });
+    } catch {}
+  }, 2500);
+}
+const fmtUSD = n => n == null ? '—' : '$' + (n < 0.01 && n > 0 ? n.toFixed(5) : n.toFixed(3));
+const fmtNum = n => (n || 0).toLocaleString('en-US');
+function usageRange() { return $('#usageRange').value; }
+function renderUsage() {
+  const all = usageLog(); const now = new Date();
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const monStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const sum = list => list.reduce((a, e) => (a.n++, a.tt += e.tt || 0, a.cost += e.cost || 0, a.miss += e.cost == null && e.engine !== 'deepseek' ? 1 : 0, a), { n: 0, tt: 0, cost: 0, miss: 0 });
+  const today = sum(all.filter(e => e.t >= dayStart)), month = sum(all.filter(e => e.t >= monStart));
+  $('#usageToday').innerHTML = `<b>${fmtUSD(today.cost)}</b><span>今天 · ${today.n} 次 · ${fmtNum(today.tt)} tokens</span>`;
+  $('#usageMonth').innerHTML = `<b>${fmtUSD(month.cost)}</b><span>本月 · ${month.n} 次 · ${fmtNum(month.tt)} tokens</span>`;
+  const r = usageRange();
+  const list = all.filter(e => r === 'all' || e.t >= (r === 'today' ? dayStart : monStart));
+  const groups = new Map();
+  for (const e of list) {
+    const k = e.engine + '|' + e.model;
+    if (!groups.has(k)) groups.set(k, { name: e.name || e.model, engine: e.engine, items: [] });
+    groups.get(k).items.push(e);
+  }
+  const rows = [...groups.values()].map(g => ({ ...g, ...sum(g.items) })).sort((a, b) => b.cost - a.cost || b.n - a.n);
+  const label = { openrouter: 'OpenRouter', deepseek: 'DeepSeek（優化指令）', google: 'Google', qwen: 'Qwen Cloud' };
+  $('#usageRows').innerHTML = rows.length ? rows.map(g => `
+    <div class="u-row"><div class="u-name"><b>${esc(g.name)}</b><small>${label[g.engine] || g.engine}</small></div>
+    <div class="u-num"><b>${fmtUSD(g.n - g.miss ? g.cost : null)}</b><small>${g.n} 次${g.tt ? ` · ${fmtNum(g.tt)} tok` : ''}${g.engine !== 'deepseek' && g.n - g.miss ? ` · 均 ${fmtUSD(g.cost / (g.n - g.miss))}/張` : ''}</small></div></div>`).join('')
+    : '<p class="field-hint u-empty">這段期間還沒有紀錄</p>';
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function exportUsage() {
+  const head = 'time,engine,model,prompt_tokens,completion_tokens,total_tokens,cost_usd';
+  const pad = n => String(n).padStart(2, '0');
+  const ts = t => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+  const q = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v;
+  const csv = '\ufeff' + [head, ...usageLog().map(e => [ts(e.t), e.engine, e.model, e.pt, e.ct, e.tt, e.cost ?? ''].map(q).join(','))].join('\n');
+  const file = new File([csv], `修圖達人用量-${Date.now()}.csv`, { type: 'text/csv' });
+  (async () => {
+    try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  })();
 }
 
 // ---------- Google Gemini（Nano Banana）----------
@@ -511,6 +582,8 @@ $('#btnGo').onclick = async () => {
     const body = { image, marked: marked.toDataURL('image/jpeg', 0.92), prompt, enhanced };
     const e = engine();
     const res = e === 'qwen' ? await inpaintQwen(body, genKey()) : e === 'openrouter' ? await inpaintOpenRouter(body, genKey()) : await inpaintGoogle(body, genKey());
+    if (e === 'qwen') logUsage({ engine: 'qwen', model: qwenModel() });
+    if (e === 'google') logUsage({ engine: 'google', model: googleModel(), name: GOOGLE_MODELS[googleModel()], ...tokensOf(res.usage) });
     S.result = composite(await loadImage(res.image));
     S.split = 0.5;
     $('#promptUsed').textContent = prompt;
@@ -577,6 +650,11 @@ async function loadOrModels() {
     $('#orHint').textContent = `讀取模型清單失敗（${e.message}），請確認網路或 Key`;
   } finally { btn.disabled = false; btn.textContent = '更新清單'; }
 }
+$('#btnUsage').addEventListener('click', e => { e.preventDefault(); $('#settings').close('cancel'); renderUsage(); $('#usage').showModal(); });
+$('#usageRange').addEventListener('change', renderUsage);
+$('#btnUsageCsv').addEventListener('click', e => { e.preventDefault(); exportUsage(); });
+$('#btnUsageClear').addEventListener('click', e => { e.preventDefault(); if (confirm('確定清除這支手機上的所有用量紀錄？')) { saveUsage([]); renderUsage(); } });
+$('#usage').addEventListener('click', e => { if (e.target === $('#usage')) $('#usage').close(); });
 $('#btnOrRefresh').addEventListener('click', e => { e.preventDefault(); loadOrModels(); });
 $('#setEngine').addEventListener('change', syncEngine);
 $('#settings').addEventListener('click', e => { if (e.target === $('#settings')) $('#settings').close('cancel'); });

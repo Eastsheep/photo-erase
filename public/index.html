@@ -67,7 +67,7 @@
     </div>
     <ul class="features">
       <li><span class="f-ico"><svg><use href="#i-hand"/></svg></span><div><b>手指圈選</b><small>圈選、塗抹、雙指縮放精修</small></div></li>
-      <li><span class="f-ico"><svg><use href="#i-sparkles"/></svg></span><div><b>AI 智慧補圖</b><small>DeepSeek 優化指令，Google Nano Banana 生成</small></div></li>
+      <li><span class="f-ico"><svg><use href="#i-sparkles"/></svg></span><div><b>AI 智慧補圖</b><small>DeepSeek 優化指令，Qwen Image 生成</small></div></li>
       <li><span class="f-ico"><svg><use href="#i-shield"/></svg></span><div><b>只改你圈的地方</b><small>其他畫面像素完全保留</small></div></li>
     </ul>
   </section>
@@ -144,8 +144,24 @@
     <div class="sheet-grip"></div>
     <div class="sheet-head"><h2>設定</h2><button value="cancel" class="icon-btn" aria-label="關閉"><svg><use href="#i-x"/></svg></button></div>
     <p class="status" id="serverStatus"></p>
-    <label>Google Gemini API Key<input id="setGoogle" type="password" placeholder="在 aistudio.google.com/apikey 建立"></label>
-    <label>模型
+    <label>修圖引擎
+      <select id="setEngine">
+        <option value="qwen">Qwen Cloud · Qwen Image（預設）</option>
+        <option value="google">Google · Nano Banana</option>
+      </select>
+    </label>
+    <label class="qwen-only">Qwen Cloud API Key <em>新加坡區</em><input id="setQwen" type="password" placeholder="sk-..."></label>
+    <label class="qwen-only">模型
+      <select id="setQwenModel">
+        <option value="qwen-image-3.0-pro">Qwen Image 3.0 Pro（推薦）</option>
+        <option value="qwen-image-2.1-pro">Qwen Image 2.1 Pro</option>
+        <option value="qwen-image-2.1-turbo">Qwen Image 2.1 Turbo（較快）</option>
+        <option value="qwen-image-2.0-pro">Qwen Image 2.0 Pro</option>
+        <option value="qwen-image-2.0">Qwen Image 2.0（較便宜）</option>
+      </select>
+    </label>
+    <label class="google-only">Google Gemini API Key<input id="setGoogle" type="password" placeholder="在 aistudio.google.com/apikey 建立"></label>
+    <label class="google-only">模型
       <select id="setGoogleModel">
         <option value="gemini-nano-banana-2.1">Nano Banana 2.1（推薦）</option>
         <option value="gemini-3.1-flash-image">Nano Banana 2（較快較省）</option>

@@ -8,7 +8,10 @@
 const UPSTREAM = {
   deepseek: 'https://api.deepseek.com',
   google: 'https://generativelanguage.googleapis.com',
+  qwen: 'https://ap-southeast-1.maas.qwencloudapi.com',
 };
+// /img 只允許下載這些網域的結果圖（Qwen 回傳的圖片網址）
+const IMG_HOSTS = ['.aliyuncs.com', '.qwencloudapi.com', '.qwencloud.com', '.alicdn.com'];
 
 export default {
   async fetch(req, env) {
@@ -29,10 +32,20 @@ export default {
     if (req.method !== 'POST') return new Response('method not allowed', { status: 405, headers: cors });
 
     const url = new URL(req.url);
+    if (url.pathname === '/img') {
+      const { url: target } = await req.json().catch(() => ({}));
+      let t; try { t = new URL(target); } catch { return new Response('bad url', { status: 400, headers: cors }); }
+      if (t.protocol !== 'https:' || !IMG_HOSTS.some(h => t.hostname.endsWith(h))) return new Response('host not allowed', { status: 403, headers: cors });
+      const img = await fetch(t.toString());
+      const h = new Headers(cors); h.set('Content-Type', img.headers.get('Content-Type') || 'image/png');
+      return new Response(img.body, { status: img.status, headers: h });
+    }
     const [, service, ...rest] = url.pathname.split('/');
     const base = UPSTREAM[service];
     const path = '/' + rest.join('/');
-    const okPath = service === 'google'
+    const okPath = service === 'qwen'
+      ? path === '/api/v1/services/aigc/multimodal-generation/generation'
+      : service === 'google'
       ? path === '/v1beta/interactions' || /^\/v1beta\/models\/[a-z0-9.-]+:generateContent$/.test(path)
       : path === '/chat/completions';
     if (!base || !okPath) {

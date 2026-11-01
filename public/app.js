@@ -224,9 +224,9 @@ function fallbackPrompt(instruction) {
   const want = (instruction || '移除路人與多餘物件').trim();
   return `請參考圖2中紅色標記的區域，對圖1的相同位置進行修改：${want}。以周圍環境的材質、光線、透視與陰影無縫自然地補全背景，不留任何殘影或輪廓；紅色區域以外的內容、構圖與色調完全保持不變；輸出為寫實照片，畫面中不得出現紅色遮罩或任何文字浮水印。`;
 }
-const SYSTEM_PROMPT = `你是專業的影像編輯提示詞工程師，負責為 Google「Nano Banana」圖像編輯模型撰寫指令。
+const SYSTEM_PROMPT = `你是專業的影像編輯提示詞工程師，負責為 AI 圖像編輯模型（Qwen Image / Nano Banana）撰寫指令。
 情境：使用者會提供兩張圖。圖1 是原始照片；圖2 是同一張照片，但需要修改的區域被塗上了不透明的紅色遮罩。
-你的任務：把使用者簡短的需求，改寫成一段清楚、具體、可直接給 Nano Banana 的繁體中文編輯指令。
+你的任務：把使用者簡短的需求，改寫成一段清楚、具體、可直接給圖像編輯模型的繁體中文編輯指令。
 撰寫原則：
 1. 明確說明「依照圖2紅色標記的位置，修改圖1對應區域」。
 2. 若是移除（路人、物件、雜物、文字、電線等），要求以周圍環境（地面、牆面、天空、植物等的材質、光線、透視、陰影、雜訊顆粒）無縫自然地補全背景，不留殘影、輪廓或陰影。
@@ -262,8 +262,19 @@ const GOOGLE_MODELS = {
   'gemini-2.5-flash-image': 'Nano Banana',
 };
 function googleModel() { const m = store.get('pe.googleModel'); return GOOGLE_MODELS[m] ? m : 'gemini-nano-banana-2.1'; }
-function genKey() { return store.get('pe.google'); }
-function engineName() { return GOOGLE_MODELS[googleModel()]; }
+const QWEN_MODELS = {
+  'qwen-image-3.0-pro': 'Qwen Image 3.0 Pro',
+  'qwen-image-2.1-pro': 'Qwen Image 2.1 Pro',
+  'qwen-image-2.1-turbo': 'Qwen Image 2.1 Turbo',
+  'qwen-image-2.0-pro': 'Qwen Image 2.0 Pro',
+  'qwen-image-2.0': 'Qwen Image 2.0',
+};
+const QWEN_BASE = 'https://ap-southeast-1.maas.qwencloudapi.com'; // Qwen Cloud 新加坡區
+function engine() { return store.get('pe.engine', 'qwen') === 'google' ? 'google' : 'qwen'; }
+function qwenModel() { const m = store.get('pe.qwenModel'); return QWEN_MODELS[m] ? m : 'qwen-image-3.0-pro'; }
+function genKey() { return store.get(engine() === 'qwen' ? 'pe.qwen' : 'pe.google'); }
+function engineName() { return engine() === 'qwen' ? QWEN_MODELS[qwenModel()] : GOOGLE_MODELS[googleModel()]; }
+function keyLabel() { return engine() === 'qwen' ? 'Qwen Cloud API Key' : 'Google Gemini API Key'; }
 
 // ---------- Google Gemini（Nano Banana）----------
 const ASPECTS = ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
@@ -294,6 +305,45 @@ async function googleCall(path, key, body) {
   const data = await r.json().catch(() => ({}));
   return { ok: r.ok, status: r.status, data };
 }
+// ---------- Qwen Cloud（Qwen Image 編輯）----------
+function sizeFor(pixels) {
+  const a = S.W / S.H; let w = Math.sqrt(pixels * a), h = w / a;
+  const f = v => Math.max(512, Math.floor(v / 16) * 16);
+  return `${f(w)}*${f(h)}`;
+}
+function blobToDataURL(b) { return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(b); }); }
+async function fetchAsDataURL(url) {
+  try { const r = await fetch(url); if (r.ok) return await blobToDataURL(await r.blob()); } catch {}
+  if (relayBase()) {
+    const r = await fetch(`${relayBase()}/img`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+    if (r.ok) return await blobToDataURL(await r.blob());
+  }
+  throw new Error('結果圖片下載失敗（被瀏覽器擋下），請在設定填入「代理網址」');
+}
+async function inpaintQwen({ image, marked, prompt, enhanced }, key) {
+  const url = relayBase() ? `${relayBase()}/qwen/api/v1/services/aigc/multimodal-generation/generation`
+    : `${QWEN_BASE}/api/v1/services/aigc/multimodal-generation/generation`;
+  let r;
+  try {
+    r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({
+      model: qwenModel(),
+      input: { messages: [{ role: 'user', content: [{ image }, { image: marked }, { text: prompt }] }] },
+      parameters: {
+        n: 1, size: sizeFor(2000 * 2000), watermark: false, prompt_extend: !enhanced,
+        negative_prompt: '紅色遮罩，紅色色塊，殘影，輪廓痕跡，文字，浮水印，畫面變形',
+      },
+    }) });
+  } catch (e) { throw netError('Qwen Cloud', e); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.code) {
+    const hint = { 401: 'API Key 錯誤或不是新加坡區的 Key。', 403: '這把 Key 沒有開通此模型，請到 Qwen Cloud 控制台確認。', 429: '請求太頻繁或額度用完，稍後再試。' }[r.status] || '';
+    throw new Error(`Qwen Cloud ${r.status}${hint ? '：' + hint : ''}${data.message ? `（${String(data.message).slice(0, 160)}）` : ''}`);
+  }
+  const out = data?.output?.choices?.[0]?.message?.content?.find(c => c.image)?.image;
+  if (!out) throw new Error('Qwen 沒有回傳圖片（可能被內容審核擋下，換個指令或範圍再試）');
+  return { image: out.startsWith('data:') ? out : await fetchAsDataURL(out) };
+}
+
 async function inpaintGoogle({ image, marked, prompt }, key) {
   const model = googleModel();
   const b64 = u => u.split(',')[1];
@@ -366,14 +416,14 @@ function setBusy(on, step, text, sub = '') {
 
 $('#btnGo').onclick = async () => {
   if (maskIsEmpty()) return toast('請先用手指圈出要移除的範圍');
-  if (!genKey()) { toast('請先填入 Google Gemini API Key'); return openSettings(); }
+  if (!genKey()) { toast(`請先填入 ${keyLabel()}`); return openSettings(); }
   const custom = !$('#instruction').hidden;
   const instruction = custom ? ($('#instruction').value.trim() || S.instruction) : S.instruction;
   try {
-    let prompt = fallbackPrompt(instruction);
+    let prompt = fallbackPrompt(instruction), enhanced = false;
     if ($('#useDeepseek').checked && store.get('pe.deepseek')) {
       setBusy(true, 1, 'AI 正在理解你的需求', 'DeepSeek 優化修圖指令');
-      prompt = await enhance(instruction);
+      prompt = await enhance(instruction); enhanced = !!store.get('pe.deepseek');
     }
     setBusy(true, 2, 'AI 正在補上背景', `${engineName()} 生成中，約 10–40 秒`);
     const image = S.base.toDataURL('image/jpeg', 0.92);
@@ -382,7 +432,8 @@ $('#btnGo').onclick = async () => {
     const red = canvas(); const rc = red.getContext('2d'); rc.drawImage(S.mask, 0, 0);
     rc.globalCompositeOperation = 'source-in'; rc.fillStyle = '#ff0000'; rc.fillRect(0, 0, S.W, S.H);
     mc.drawImage(red, 0, 0);
-    const res = await inpaintGoogle({ image, marked: marked.toDataURL('image/jpeg', 0.92), prompt }, genKey());
+    const body = { image, marked: marked.toDataURL('image/jpeg', 0.92), prompt, enhanced };
+    const res = engine() === 'qwen' ? await inpaintQwen(body, genKey()) : await inpaintGoogle(body, genKey());
     S.result = composite(await loadImage(res.image));
     S.split = 0.5;
     $('#promptUsed').textContent = prompt;
@@ -412,17 +463,24 @@ $('#btnSave').onclick = () => {
 
 // ---------- 設定 ----------
 function updateStatus() {
-  $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}${store.get('pe.deepseek') ? ' + DeepSeek' : ''}` : '第一次使用：填入 Google Gemini API Key 就能開始。';
+  $('#serverStatus').textContent = genKey() ? `✓ 已設定，使用 ${engineName()}${store.get('pe.deepseek') ? ' + DeepSeek' : ''}` : `第一次使用：填入 ${keyLabel()} 就能開始。`;
 }
 function openSettings() {
-  $('#setGoogle').value = store.get('pe.google'); $('#setGoogleModel').value = googleModel();
+  $('#setEngine').value = engine(); $('#setQwen').value = store.get('pe.qwen'); $('#setQwenModel').value = qwenModel();
+  $('#setGoogle').value = store.get('pe.google'); $('#setGoogleModel').value = googleModel(); syncEngine();
   $('#setDeepseek').value = store.get('pe.deepseek'); $('#setRelay').value = store.get('pe.relay');
   updateStatus(); $('#settings').showModal();
 }
 $('#btnSettings').onclick = openSettings;
+function syncEngine() {
+  const q = $('#setEngine').value === 'qwen';
+  $$('.qwen-only').forEach(el => el.hidden = !q); $$('.google-only').forEach(el => el.hidden = q);
+}
+$('#setEngine').addEventListener('change', syncEngine);
 $('#settings').addEventListener('click', e => { if (e.target === $('#settings')) $('#settings').close('cancel'); });
 $('#settings').addEventListener('close', () => {
   if ($('#settings').returnValue !== 'ok') return;
+  store.set('pe.engine', $('#setEngine').value); store.set('pe.qwen', $('#setQwen').value.trim()); store.set('pe.qwenModel', $('#setQwenModel').value);
   store.set('pe.google', $('#setGoogle').value.trim()); store.set('pe.googleModel', $('#setGoogleModel').value);
   store.set('pe.deepseek', $('#setDeepseek').value.trim()); store.set('pe.relay', $('#setRelay').value.trim());
   updateStatus(); toast('設定已儲存');

@@ -234,14 +234,13 @@ const SYSTEM_PROMPT = `你是專業的影像編輯提示詞工程師，負責為
 4. 輸出寫實照片風格，不加浮水印、文字或新物件（除非使用者要求）。
 只輸出最終指令本身，不要任何解釋、引號或前後綴，長度 80–200 字。`;
 
-function relayBase() { return store.get('pe.relay').replace(/\/+$/, ''); }
 function netError(what, e) {
-  return new Error(`${what} 連線失敗（${e.message}）。若是被瀏覽器擋下（CORS），請在設定填入「代理網址」，見 README 的 Cloudflare Worker 說明`);
+  return new Error(`${what} 連線失敗（${e.message}）`);
 }
 async function enhance(instruction) {
   const key = store.get('pe.deepseek');
   if (!key) return fallbackPrompt(instruction);
-  const url = relayBase() ? `${relayBase()}/deepseek/chat/completions` : 'https://api.deepseek.com/chat/completions';
+  const url = 'https://api.deepseek.com/chat/completions';
   let r;
   try {
     r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({
@@ -465,7 +464,7 @@ function findImage(obj) {
   return found;
 }
 async function googleCall(path, key, body) {
-  const base = relayBase() ? `${relayBase()}/google` : 'https://generativelanguage.googleapis.com';
+  const base = 'https://generativelanguage.googleapis.com';
   let r;
   try {
     r = await fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body) });
@@ -482,15 +481,10 @@ function sizeFor(pixels) {
 function blobToDataURL(b) { return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(b); }); }
 async function fetchAsDataURL(url) {
   try { const r = await fetch(url); if (r.ok) return await blobToDataURL(await r.blob()); } catch {}
-  if (relayBase()) {
-    const r = await fetch(`${relayBase()}/img`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-    if (r.ok) return await blobToDataURL(await r.blob());
-  }
-  throw new Error('結果圖片下載失敗（被瀏覽器擋下），請在設定填入「代理網址」');
+  throw new Error('結果圖片下載失敗（可能被瀏覽器擋下）');
 }
 async function inpaintQwen({ image, marked, prompt, enhanced }, key) {
-  const url = relayBase() ? `${relayBase()}/qwen/api/v1/services/aigc/multimodal-generation/generation`
-    : `${QWEN_BASE}/api/v1/services/aigc/multimodal-generation/generation`;
+  const url = `${QWEN_BASE}/api/v1/services/aigc/multimodal-generation/generation`;
   let r;
   try {
     r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({
@@ -641,7 +635,7 @@ function openSettings() {
   $('#setEngine').value = engine(); $('#setQwen').value = store.get('pe.qwen'); $('#setQwenModel').value = qwenModel();
   $('#setGoogle').value = store.get('pe.google'); $('#setGoogleModel').value = googleModel();
   $('#setOr').value = store.get('pe.openrouter'); fillOrSelect(); syncEngine();
-  $('#setDeepseek').value = store.get('pe.deepseek'); $('#setRelay').value = store.get('pe.relay');
+  $('#setDeepseek').value = store.get('pe.deepseek');
   updateStatus(); $('#settings').showModal();
 }
 $('#btnSettings').onclick = openSettings;
@@ -686,7 +680,7 @@ $('#settings').addEventListener('close', () => {
   store.set('pe.google', $('#setGoogle').value.trim()); store.set('pe.googleModel', $('#setGoogleModel').value);
   const orSel = $('#setOrModel'); store.set('pe.openrouter', $('#setOr').value.trim());
   if (orSel.value) { store.set('pe.orModel', orSel.value); store.set('pe.orModelName', orSel.selectedOptions[0]?.text || orSel.value); }
-  store.set('pe.deepseek', $('#setDeepseek').value.trim()); store.set('pe.relay', $('#setRelay').value.trim());
+  store.set('pe.deepseek', $('#setDeepseek').value.trim());
   updateStatus(); toast('設定已儲存');
 });
 

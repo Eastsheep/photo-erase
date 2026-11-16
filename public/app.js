@@ -51,7 +51,7 @@ $('#btnBack').onclick = () => {
 // ---------- 載入圖片 ----------
 function onFile(e) {
   const f = e.target.files?.[0]; if (!f) return;
-  S.mode = e.target.id === 'portraitInput' ? 'portrait' : 'erase';
+  S.mode = S.homeMode;
   const url = URL.createObjectURL(f);
   const img = new Image();
   img.onload = () => {
@@ -70,7 +70,18 @@ function onFile(e) {
 }
 $('#fileInput').addEventListener('change', onFile);
 $('#cameraInput').addEventListener('change', onFile);
-$('#portraitInput').addEventListener('change', onFile);
+
+// 首頁模式：移除路人／職場形象照，兩者同等，相簿與拍照按鈕依目前模式開啟
+function setHomeMode(m) {
+  S.homeMode = m === 'portrait' ? 'portrait' : 'erase';
+  store.set('pe.homeMode', S.homeMode);
+  $$('.mode-tab').forEach(t => { const on = t.dataset.mode === S.homeMode; t.classList.toggle('on', on); t.setAttribute('aria-selected', on); });
+  $$('#home [data-for]').forEach(el => el.hidden = el.dataset.for !== S.homeMode);
+  $('#heroIco').setAttribute('href', S.homeMode === 'portrait' ? '#i-briefcase' : '#i-sparkles');
+  $('#cameraInput').setAttribute('capture', S.homeMode === 'portrait' ? 'user' : 'environment'); // 形象照預設前鏡頭
+}
+$$('.mode-tab').forEach(t => t.onclick = () => setHomeMode(t.dataset.mode));
+setHomeMode(store.get('pe.homeMode', 'erase'));
 
 function resetMask() { S.mask = canvas(); S.history = []; }
 
@@ -630,7 +641,7 @@ const BACKDROPS = {
   navy: '深藍色攝影棚背景，帶柔和漸層，沉穩專業',
 };
 const P = { outfit: 'suit', bg: 'grey' };
-function portraitPrompt() {
+function portraitPrompt(extra = '') {
   return `把這張照片修成職場專業人士的形象照（企業官網／LinkedIn 大頭照風格）。
 最重要：必須是同一個人。完全保留照片中人物的臉型、五官（眼睛、眉毛、鼻子、嘴巴、耳朵）、膚色、年齡感、髮型與髮色、痣與臉部特徵，不要換臉、不要改變臉型或五官比例、不要過度美顏。
 服裝：${OUTFITS[P.outfit]}。
@@ -638,7 +649,8 @@ function portraitPrompt() {
 打光：專業棚拍柔光（主光加補光，帶一點輪廓光），臉部明亮均勻、陰影自然，眼神有光。
 姿態與表情：保持原本的臉部角度與表情，肩膀端正放鬆，看起來自然、自信、親切。頭髮整理乾淨，去除雜亂髮絲。
 構圖：人物置中，以胸上半身為主；若照片中有多人，只保留最主要（最大、最清楚）的那一位。
-畫質：寫實照片質感、對焦清晰，肌膚保留自然紋理，只做輕微修飾（淡化痘痘與暗沉）。不得出現文字、浮水印、相框或多餘物件。`;
+畫質：寫實照片質感、對焦清晰，肌膚保留自然紋理，只做輕微修飾（淡化痘痘與暗沉）。不得出現文字、浮水印、相框或多餘物件。${extra ? `
+使用者的額外要求（優先照做，若與上面的服裝、背景設定衝突，以這裡為準；但仍須保留本人五官）：${extra}` : ''}`;
 }
 function bindChips(sel, attr) {
   $$(sel + ' .chip').forEach(c => c.onclick = () => {
@@ -648,6 +660,7 @@ function bindChips(sel, attr) {
 }
 bindChips('#outfitChips', 'outfit');
 bindChips('#bgChips', 'bg');
+$('#portraitExtra').value = store.get('pe.portraitExtra');
 
 // 生成結果長寬比與原圖不同時，置中裁切填滿，避免變形
 function coverCanvas(img) {
@@ -662,7 +675,8 @@ $('#btnPortraitGo').onclick = async () => {
   if (!genKey()) { toast(`請先填入 ${keyLabel()}`); return openSettings(); }
   try {
     setBusy(true, 2, 'AI 正在拍攝形象照', `${engineName()} 生成中，約 15–60 秒`);
-    const prompt = portraitPrompt();
+    const extra = $('#portraitExtra').value.trim(); store.set('pe.portraitExtra', extra);
+    const prompt = portraitPrompt(extra);
     const res = await runEngine({
       images: [S.base.toDataURL('image/jpeg', 0.92)], prompt, enhanced: true,
       negative: '換臉，五官改變，臉型改變，過度美顏，塑膠皮膚，卡通，畸形的手，多餘的人，文字，浮水印',

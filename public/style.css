@@ -170,12 +170,14 @@ input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;bac
 .u-card b{font-size:22px;background:linear-gradient(90deg,#ff4d6d,#ff9f43);-webkit-background-clip:text;background-clip:text;color:transparent}
 .u-card span{font-size:12px;color:var(--muted)}
 .u-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
-.u-row{display:flex;justify-content:space-between;gap:12px;background:var(--glass);border-radius:12px;padding:10px 12px}
+.u-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;background:var(--glass);border-radius:12px;padding:10px 12px}
 .u-name,.u-num{display:flex;flex-direction:column;gap:3px;min-width:0}
-.u-num{text-align:right;flex:none}
-.u-name b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.u-name{flex:1}
+.u-num{text-align:right;flex:0 1 auto;max-width:48%}
+.u-name b{font-size:14px;line-height:1.35;overflow-wrap:anywhere}
 .u-row small{font-size:12px;color:var(--muted)}
 .u-num b{font-size:15px}
+.u-num small span{white-space:nowrap}
 .u-empty{text-align:center;padding:16px 0}
 .u-actions{margin-top:12px}.u-actions .btn{flex:1}
 .u-sec{display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px;font-size:13px;color:var(--muted);font-weight:500}

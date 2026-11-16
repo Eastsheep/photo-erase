@@ -426,7 +426,7 @@ function renderUsage() {
   const label = { openrouter: 'OpenRouter', deepseek: 'DeepSeek（優化指令）', google: 'Google', qwen: 'Qwen Cloud' };
   $('#usageRows').innerHTML = rows.length ? rows.map(g => `
     <div class="u-row"><div class="u-name"><b>${esc(g.name)}</b><small>${label[g.engine] || g.engine}</small></div>
-    <div class="u-num"><b>${fmtUSD(g.n - g.miss ? g.cost : null)}</b><small>${g.n} 次${g.tt ? ` · ${fmtNum(g.tt)} tok` : ''}${g.engine !== 'deepseek' && g.n - g.miss ? ` · 均 ${fmtUSD(g.cost / (g.n - g.miss))}/張` : ''}</small></div></div>`).join('')
+    <div class="u-num"><b>${fmtUSD(g.n - g.miss ? g.cost : null)}</b><small>${[`${g.n} 次`, g.tt ? `${fmtNum(g.tt)} tok` : '', g.engine !== 'deepseek' && g.n - g.miss ? `均 ${fmtUSD(g.cost / (g.n - g.miss))}/張` : ''].filter(Boolean).map(t => `<span>${t}</span>`).join(' · ')}</small></div></div>`).join('')
     : '<p class="field-hint u-empty">這段期間還沒有紀錄</p>';
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }

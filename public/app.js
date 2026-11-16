@@ -11,7 +11,7 @@ const store = {
 const S = {
   W: 0, H: 0, base: null, mask: null, result: null, history: [],
   tool: 'lasso', drawing: false, pts: [], last: null,
-  screen: 'home', busy: false,
+  screen: 'home', busy: false, mode: 'erase', // mode：erase（圈選移除）或 portrait（職場形象照）
   view: { z: 1, tx: 0, ty: 0, fit: 1 },
   pointers: new Map(), pinch: null, dragCompare: false, split: 0.5,
   instruction: '移除圈選範圍內的路人，自然補上背景',
@@ -32,8 +32,12 @@ function showScreen(name) {
   $('#brand').hidden = name !== 'home';
   $('#btnBack').hidden = name === 'home';
   $('#barTitle').hidden = name === 'home';
-  $('#barTitle').textContent = name === 'result' ? '完成' : '編輯';
+  $('#barTitle').textContent = name === 'result' ? '完成' : name === 'portrait' ? '職場形象照' : '編輯';
   $('#editPanel').hidden = name !== 'edit';
+  $('#portraitPanel').hidden = name !== 'portrait';
+  $('#coach').textContent = name === 'portrait' ? '選好服裝與背景，按下生成' : '用手指圈出要移除的人或物　·　雙指可縮放';
+  $('#coach').hidden = name === 'result';
+  $('#tagAfter').textContent = S.mode === 'portrait' ? '形象照' : '修復後';
   $('#resultPanel').hidden = name !== 'result';
   $('#compare').hidden = $('#tagBefore').hidden = $('#tagAfter').hidden = name !== 'result';
   if (name !== 'home') requestAnimationFrame(fitView);
@@ -47,6 +51,7 @@ $('#btnBack').onclick = () => {
 // ---------- 載入圖片 ----------
 function onFile(e) {
   const f = e.target.files?.[0]; if (!f) return;
+  S.mode = e.target.id === 'portraitInput' ? 'portrait' : 'erase';
   const url = URL.createObjectURL(f);
   const img = new Image();
   img.onload = () => {
@@ -57,7 +62,7 @@ function onFile(e) {
     resetMask(); S.result = null;
     view.width = S.W; view.height = S.H;
     $('#coach').classList.remove('fade');
-    showScreen('edit'); render(); updateGo();
+    showScreen(S.mode === 'portrait' ? 'portrait' : 'edit'); render(); updateGo();
   };
   img.onerror = () => toast('無法讀取這張圖片');
   img.src = url;
@@ -65,6 +70,7 @@ function onFile(e) {
 }
 $('#fileInput').addEventListener('change', onFile);
 $('#cameraInput').addEventListener('change', onFile);
+$('#portraitInput').addEventListener('change', onFile);
 
 function resetMask() { S.mask = canvas(); S.history = []; }
 
@@ -234,14 +240,13 @@ const SYSTEM_PROMPT = `你是專業的影像編輯提示詞工程師，負責為
 4. 輸出寫實照片風格，不加浮水印、文字或新物件（除非使用者要求）。
 只輸出最終指令本身，不要任何解釋、引號或前後綴，長度 80–200 字。`;
 
-function relayBase() { return store.get('pe.relay').replace(/\/+$/, ''); }
 function netError(what, e) {
-  return new Error(`${what} 連線失敗（${e.message}）。若是被瀏覽器擋下（CORS），請在設定填入「代理網址」，見 README 的 Cloudflare Worker 說明`);
+  return new Error(`${what} 連線失敗（${e.message}）`);
 }
 async function enhance(instruction) {
   const key = store.get('pe.deepseek');
   if (!key) return fallbackPrompt(instruction);
-  const url = relayBase() ? `${relayBase()}/deepseek/chat/completions` : 'https://api.deepseek.com/chat/completions';
+  const url = 'https://api.deepseek.com/chat/completions';
   let r;
   try {
     r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({
@@ -317,7 +322,7 @@ function extractOrImage(d) {
   const img = d?.choices?.[0]?.message?.images?.[0];
   return img?.image_url?.url || img?.url || null;
 }
-async function inpaintOpenRouter({ image, marked, prompt }, key) {
+async function inpaintOpenRouter({ images, prompt }, key) {
   const model = orModel();
   if (!model) throw new Error('請先到設定選擇 OpenRouter 模型');
   const post = async (path, body) => {
@@ -329,16 +334,15 @@ async function inpaintOpenRouter({ image, marked, prompt }, key) {
   const aspect = nearestAspect();
   // 1) 新版專用圖片端點
   const ref = url => ({ type: 'image_url', image_url: { url } });
-  let res = await post('/images', { model, prompt, input_references: [ref(image), ref(marked)], aspect_ratio: aspect, n: 1 });
-  if (!res.ok && res.status === 400) res = await post('/images', { model, prompt, input_references: [ref(image), ref(marked)], n: 1 });
+  let res = await post('/images', { model, prompt, input_references: images.map(ref), aspect_ratio: aspect, n: 1 });
+  if (!res.ok && res.status === 400) res = await post('/images', { model, prompt, input_references: images.map(ref), n: 1 });
   // 2) 退回 chat completions 的圖片輸出
   if (!res.ok && [400, 404, 405].includes(res.status)) {
     const fb = await post('/chat/completions', {
       model, modalities: ['image', 'text'],
       messages: [{ role: 'user', content: [
         { type: 'text', text: prompt },
-        { type: 'image_url', image_url: { url: image } },
-        { type: 'image_url', image_url: { url: marked } },
+        ...images.map(url => ({ type: 'image_url', image_url: { url } })),
       ] }],
       usage: { include: true },
     });
@@ -465,7 +469,7 @@ function findImage(obj) {
   return found;
 }
 async function googleCall(path, key, body) {
-  const base = relayBase() ? `${relayBase()}/google` : 'https://generativelanguage.googleapis.com';
+  const base = 'https://generativelanguage.googleapis.com';
   let r;
   try {
     r = await fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body) });
@@ -482,23 +486,18 @@ function sizeFor(pixels) {
 function blobToDataURL(b) { return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(b); }); }
 async function fetchAsDataURL(url) {
   try { const r = await fetch(url); if (r.ok) return await blobToDataURL(await r.blob()); } catch {}
-  if (relayBase()) {
-    const r = await fetch(`${relayBase()}/img`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-    if (r.ok) return await blobToDataURL(await r.blob());
-  }
-  throw new Error('結果圖片下載失敗（被瀏覽器擋下），請在設定填入「代理網址」');
+  throw new Error('結果圖片下載失敗（可能被瀏覽器擋下）');
 }
-async function inpaintQwen({ image, marked, prompt, enhanced }, key) {
-  const url = relayBase() ? `${relayBase()}/qwen/api/v1/services/aigc/multimodal-generation/generation`
-    : `${QWEN_BASE}/api/v1/services/aigc/multimodal-generation/generation`;
+async function inpaintQwen({ images, prompt, enhanced, negative }, key) {
+  const url = `${QWEN_BASE}/api/v1/services/aigc/multimodal-generation/generation`;
   let r;
   try {
     r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({
       model: qwenModel(),
-      input: { messages: [{ role: 'user', content: [{ image }, { image: marked }, { text: prompt }] }] },
+      input: { messages: [{ role: 'user', content: [...images.map(image => ({ image })), { text: prompt }] }] },
       parameters: {
         n: 1, size: sizeFor(2000 * 2000), watermark: false, prompt_extend: !enhanced,
-        negative_prompt: '紅色遮罩，紅色色塊，殘影，輪廓痕跡，文字，浮水印，畫面變形',
+        negative_prompt: negative || '紅色遮罩，紅色色塊，殘影，輪廓痕跡，文字，浮水印，畫面變形',
       },
     }) });
   } catch (e) { throw netError('Qwen Cloud', e); }
@@ -512,7 +511,7 @@ async function inpaintQwen({ image, marked, prompt, enhanced }, key) {
   return { image: out.startsWith('data:') ? out : await fetchAsDataURL(out) };
 }
 
-async function inpaintGoogle({ image, marked, prompt }, key) {
+async function inpaintGoogle({ images, prompt }, key) {
   const model = googleModel();
   const b64 = u => u.split(',')[1];
   const aspect = nearestAspect();
@@ -522,8 +521,7 @@ async function inpaintGoogle({ image, marked, prompt }, key) {
     model,
     input: [
       { type: 'text', text: prompt },
-      { type: 'image', mime_type: 'image/jpeg', data: b64(image) },
-      { type: 'image', mime_type: 'image/jpeg', data: b64(marked) },
+      ...images.map(u => ({ type: 'image', mime_type: 'image/jpeg', data: b64(u) })),
     ],
     response_format: { type: 'image', mime_type: 'image/jpeg', aspect_ratio: aspect, image_size: size },
   });
@@ -532,8 +530,7 @@ async function inpaintGoogle({ image, marked, prompt }, key) {
     const fb = await googleCall(`/v1beta/models/${model}:generateContent`, key, {
       contents: [{ parts: [
         { text: prompt },
-        { inline_data: { mime_type: 'image/jpeg', data: b64(image) } },
-        { inline_data: { mime_type: 'image/jpeg', data: b64(marked) } },
+        ...images.map(u => ({ inline_data: { mime_type: 'image/jpeg', data: b64(u) } })),
       ] }],
       generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: aspect } },
     });
@@ -582,6 +579,15 @@ function setBusy(on, step, text, sub = '') {
   if (!on) updateGo();
 }
 
+// 依目前引擎送出圖片編輯請求，並記錄用量
+async function runEngine(body) {
+  const e = engine(), key = genKey();
+  const res = e === 'qwen' ? await inpaintQwen(body, key) : e === 'openrouter' ? await inpaintOpenRouter(body, key) : await inpaintGoogle(body, key);
+  if (e === 'qwen') logUsage({ engine: 'qwen', model: qwenModel() });
+  if (e === 'google') logUsage({ engine: 'google', model: googleModel(), name: GOOGLE_MODELS[googleModel()], ...tokensOf(res.usage) });
+  return res;
+}
+
 $('#btnGo').onclick = async () => {
   if (maskIsEmpty()) return toast('請先用手指圈出要移除的範圍');
   if (!genKey()) { toast(`請先填入 ${keyLabel()}`); return openSettings(); }
@@ -600,11 +606,7 @@ $('#btnGo').onclick = async () => {
     const red = canvas(); const rc = red.getContext('2d'); rc.drawImage(S.mask, 0, 0);
     rc.globalCompositeOperation = 'source-in'; rc.fillStyle = '#ff0000'; rc.fillRect(0, 0, S.W, S.H);
     mc.drawImage(red, 0, 0);
-    const body = { image, marked: marked.toDataURL('image/jpeg', 0.92), prompt, enhanced };
-    const e = engine();
-    const res = e === 'qwen' ? await inpaintQwen(body, genKey()) : e === 'openrouter' ? await inpaintOpenRouter(body, genKey()) : await inpaintGoogle(body, genKey());
-    if (e === 'qwen') logUsage({ engine: 'qwen', model: qwenModel() });
-    if (e === 'google') logUsage({ engine: 'google', model: googleModel(), name: GOOGLE_MODELS[googleModel()], ...tokensOf(res.usage) });
+    const res = await runEngine({ images: [image, marked.toDataURL('image/jpeg', 0.92)], prompt, enhanced });
     S.result = composite(await loadImage(res.image));
     S.split = 0.5;
     $('#promptUsed').textContent = prompt;
@@ -614,10 +616,70 @@ $('#btnGo').onclick = async () => {
   } finally { setBusy(false); }
 };
 
+// ---------- 職場形象照：整張重繪，保留本人五官 ----------
+const OUTFITS = {
+  suit: '換上合身的深色（深灰或海軍藍）商務西裝外套，內搭乾淨的淺色襯衫或上衣，依照本人的性別與風格自然搭配，衣領平整',
+  shirt: '換上熨燙平整、合身的白色正式襯衫，簡潔俐落，依照本人的性別與風格自然搭配',
+  smart: '換上質感好的商務休閒服裝（例如素色針織衫或休閒西裝外套），專業但親切',
+  keep: '保留原本的服裝款式與顏色，只把衣服整理得平整乾淨、去除皺摺與髒污',
+};
+const BACKDROPS = {
+  grey: '乾淨的淺灰色攝影棚無縫背景，帶柔和的漸層暗角',
+  white: '純白色乾淨背景，像證件照或企業官網大頭照',
+  office: '明亮現代的辦公室場景，背景以淺景深大幅虛化，不搶主體',
+  navy: '深藍色攝影棚背景，帶柔和漸層，沉穩專業',
+};
+const P = { outfit: 'suit', bg: 'grey' };
+function portraitPrompt() {
+  return `把這張照片修成職場專業人士的形象照（企業官網／LinkedIn 大頭照風格）。
+最重要：必須是同一個人。完全保留照片中人物的臉型、五官（眼睛、眉毛、鼻子、嘴巴、耳朵）、膚色、年齡感、髮型與髮色、痣與臉部特徵，不要換臉、不要改變臉型或五官比例、不要過度美顏。
+服裝：${OUTFITS[P.outfit]}。
+背景：${BACKDROPS[P.bg]}。
+打光：專業棚拍柔光（主光加補光，帶一點輪廓光），臉部明亮均勻、陰影自然，眼神有光。
+姿態與表情：保持原本的臉部角度與表情，肩膀端正放鬆，看起來自然、自信、親切。頭髮整理乾淨，去除雜亂髮絲。
+構圖：人物置中，以胸上半身為主；若照片中有多人，只保留最主要（最大、最清楚）的那一位。
+畫質：寫實照片質感、對焦清晰，肌膚保留自然紋理，只做輕微修飾（淡化痘痘與暗沉）。不得出現文字、浮水印、相框或多餘物件。`;
+}
+function bindChips(sel, attr) {
+  $$(sel + ' .chip').forEach(c => c.onclick = () => {
+    $$(sel + ' .chip').forEach(x => x.classList.toggle('on', x === c));
+    P[attr] = c.dataset[attr];
+  });
+}
+bindChips('#outfitChips', 'outfit');
+bindChips('#bgChips', 'bg');
+
+// 生成結果長寬比與原圖不同時，置中裁切填滿，避免變形
+function coverCanvas(img) {
+  const out = canvas(); const k = Math.max(S.W / img.naturalWidth, S.H / img.naturalHeight);
+  const w = img.naturalWidth * k, h = img.naturalHeight * k;
+  const o = out.getContext('2d'); o.imageSmoothingQuality = 'high';
+  o.drawImage(img, (S.W - w) / 2, (S.H - h) / 2, w, h);
+  return out;
+}
+
+$('#btnPortraitGo').onclick = async () => {
+  if (!genKey()) { toast(`請先填入 ${keyLabel()}`); return openSettings(); }
+  try {
+    setBusy(true, 2, 'AI 正在拍攝形象照', `${engineName()} 生成中，約 15–60 秒`);
+    const prompt = portraitPrompt();
+    const res = await runEngine({
+      images: [S.base.toDataURL('image/jpeg', 0.92)], prompt, enhanced: true,
+      negative: '換臉，五官改變，臉型改變，過度美顏，塑膠皮膚，卡通，畸形的手，多餘的人，文字，浮水印',
+    });
+    S.result = coverCanvas(await loadImage(res.image));
+    S.split = 0.5;
+    $('#promptUsed').textContent = prompt;
+    showScreen('result'); render(); vibrate(20);
+  } catch (err) {
+    toast('失敗：' + err.message, 6000);
+  } finally { setBusy(false); }
+};
+
 // ---------- 結果 ----------
-$('#btnDiscard').onclick = () => { S.result = null; showScreen('edit'); render(); };
+$('#btnDiscard').onclick = () => { S.result = null; showScreen(S.mode === 'portrait' ? 'portrait' : 'edit'); render(); };
 $('#btnKeep').onclick = () => {
-  S.base = S.result; S.result = null; resetMask(); showScreen('edit'); render(); updateGo();
+  S.mode = 'erase'; S.base = S.result; S.result = null; resetMask(); showScreen('edit'); render(); updateGo();
   toast('已套用，可以繼續圈選下一處');
 };
 $('#btnSave').onclick = () => {
@@ -641,7 +703,7 @@ function openSettings() {
   $('#setEngine').value = engine(); $('#setQwen').value = store.get('pe.qwen'); $('#setQwenModel').value = qwenModel();
   $('#setGoogle').value = store.get('pe.google'); $('#setGoogleModel').value = googleModel();
   $('#setOr').value = store.get('pe.openrouter'); fillOrSelect(); syncEngine();
-  $('#setDeepseek').value = store.get('pe.deepseek'); $('#setRelay').value = store.get('pe.relay');
+  $('#setDeepseek').value = store.get('pe.deepseek');
   updateStatus(); $('#settings').showModal();
 }
 $('#btnSettings').onclick = openSettings;
@@ -686,7 +748,7 @@ $('#settings').addEventListener('close', () => {
   store.set('pe.google', $('#setGoogle').value.trim()); store.set('pe.googleModel', $('#setGoogleModel').value);
   const orSel = $('#setOrModel'); store.set('pe.openrouter', $('#setOr').value.trim());
   if (orSel.value) { store.set('pe.orModel', orSel.value); store.set('pe.orModelName', orSel.selectedOptions[0]?.text || orSel.value); }
-  store.set('pe.deepseek', $('#setDeepseek').value.trim()); store.set('pe.relay', $('#setRelay').value.trim());
+  store.set('pe.deepseek', $('#setDeepseek').value.trim());
   updateStatus(); toast('設定已儲存');
 });
 

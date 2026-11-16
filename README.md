@@ -11,6 +11,10 @@
 3. 修圖引擎收到原圖、紅色標記圖和指令，生成修好的照片：預設 **Qwen Cloud · Qwen Image**（新加坡區），也可切換 **Google Nano Banana** 或 **OpenRouter**（自選模型）。
 4. App 只把結果貼回你圈選的範圍（邊緣羽化），其他地方保留原圖像素。
 
+## 職場形象照
+
+首頁「職場形象照」：上傳一張生活照，選服裝（深色西裝、白襯衫、商務休閒、保留原服裝）與背景（淺灰棚拍、純白、辦公室虛化、深藍），App 把整張照片送給目前設定的修圖引擎重繪成專業形象照，提示詞要求保留本人臉型、五官、膚色與髮型，只換服裝、背景與打光。不經過 DeepSeek，每次生成的費用與一般修圖相同（一張圖）。保留五官的效果以 Nano Banana Pro／2.1 較穩定。
+
 ## 設定
 
 App 右上角「設定」：
@@ -23,7 +27,6 @@ App 右上角「設定」：
 | Google Gemini API Key | 用 Nano Banana 時才需要，專案需開通 Billing |
 | 模型 | 依引擎顯示 |
 | DeepSeek API Key | 選填，填了才會用 DeepSeek 優化指令 |
-| 代理網址 | 選填，連線被瀏覽器擋下時才需要 |
 
 金鑰只存在你的手機瀏覽器，不會進到 repo。
 
@@ -38,6 +41,5 @@ App 右上角「設定」：
 ## 部署
 
 - 前端：推到 `main` 會由 GitHub Actions 把 `public/` 部署到 GitHub Pages。
-- 代理（選用）：`relay/worker.js` 是 Cloudflare Worker，只轉送 DeepSeek、Qwen Cloud、Google 的請求（以及下載 Qwen 結果圖的 `/img`）、不保存金鑰，預設只允許 `https://eastsheep.github.io` 使用。`wrangler.jsonc` 讓 Cloudflare 連 repo 自動部署。
 
 加到主畫面：iPhone 用 Safari 開網址 → 分享 → 加入主畫面；Android 用 Chrome → 選單 → 安裝應用程式。

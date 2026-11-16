@@ -42,11 +42,16 @@ function showScreen(name) {
   $('#compare').hidden = $('#tagBefore').hidden = $('#tagAfter').hidden = name !== 'result';
   if (name !== 'home') requestAnimationFrame(fitView);
 }
+// ---------- 儲存檢核 ----------
+// resultSaved：目前結果是否已儲存；baseDirty：「繼續修」後畫面上的照片含有尚未儲存的修改
+function hasUnsaved() { return S.result ? !S.resultSaved : !!S.baseDirty; }
+const UNSAVED_MSG = '修好的照片還沒儲存，離開後就找不回來了。確定要離開嗎？';
 $('#btnBack').onclick = () => {
   if (S.busy) return;
-  if (S.result && !confirm('還沒儲存，確定要離開嗎？')) return;
-  S.result = null; showScreen('home');
+  if (hasUnsaved() && !confirm(UNSAVED_MSG)) return;
+  S.result = null; S.baseDirty = false; showScreen('home');
 };
+window.addEventListener('beforeunload', e => { if (hasUnsaved() || S.busy) { e.preventDefault(); e.returnValue = ''; } });
 
 // ---------- 載入圖片 ----------
 function onFile(e) {
@@ -59,7 +64,7 @@ function onFile(e) {
     S.W = Math.round(img.naturalWidth * k); S.H = Math.round(img.naturalHeight * k);
     S.base = canvas(); S.base.getContext('2d').drawImage(img, 0, 0, S.W, S.H);
     URL.revokeObjectURL(url);
-    resetMask(); S.result = null;
+    resetMask(); S.result = null; S.baseDirty = false; S.resultSaved = false;
     view.width = S.W; view.height = S.H;
     $('#coach').classList.remove('fade');
     showScreen(S.mode === 'portrait' ? 'portrait' : 'edit'); render(); updateGo();
@@ -618,7 +623,7 @@ $('#btnGo').onclick = async () => {
     rc.globalCompositeOperation = 'source-in'; rc.fillStyle = '#ff0000'; rc.fillRect(0, 0, S.W, S.H);
     mc.drawImage(red, 0, 0);
     const res = await runEngine({ images: [image, marked.toDataURL('image/jpeg', 0.92)], prompt, enhanced });
-    S.result = composite(await loadImage(res.image));
+    S.result = composite(await loadImage(res.image)); S.resultSaved = false;
     S.split = 0.5;
     $('#promptUsed').textContent = prompt;
     showScreen('result'); render(); vibrate(20);
@@ -681,7 +686,7 @@ $('#btnPortraitGo').onclick = async () => {
       images: [S.base.toDataURL('image/jpeg', 0.92)], prompt, enhanced: true,
       negative: '換臉，五官改變，臉型改變，過度美顏，塑膠皮膚，卡通，畸形的手，多餘的人，文字，浮水印',
     });
-    S.result = coverCanvas(await loadImage(res.image));
+    S.result = coverCanvas(await loadImage(res.image)); S.resultSaved = false;
     S.split = 0.5;
     $('#promptUsed').textContent = prompt;
     showScreen('result'); render(); vibrate(20);
@@ -691,19 +696,26 @@ $('#btnPortraitGo').onclick = async () => {
 };
 
 // ---------- 結果 ----------
-$('#btnDiscard').onclick = () => { S.result = null; showScreen(S.mode === 'portrait' ? 'portrait' : 'edit'); render(); };
+const modeScreen = () => S.mode === 'portrait' ? 'portrait' : 'edit';
+$('#btnDiscard').onclick = () => {
+  if (!S.resultSaved && !confirm('這次的結果還沒儲存，確定要放棄並重來嗎？')) return;
+  S.result = null; showScreen(modeScreen()); render();
+};
+// 繼續修：以結果為新底圖，留在原本的功能（形象照仍是形象照，移除路人仍是移除路人）
 $('#btnKeep').onclick = () => {
-  S.mode = 'erase'; S.base = S.result; S.result = null; resetMask(); showScreen('edit'); render(); updateGo();
-  toast('已套用，可以繼續圈選下一處');
+  S.baseDirty = !S.resultSaved;
+  S.base = S.result; S.result = null; resetMask(); showScreen(modeScreen()); render(); updateGo();
+  toast(S.mode === 'portrait' ? '已套用，可以調整服裝、背景或要求再生成一次' : '已套用，可以繼續圈選下一處');
 };
 $('#btnSave').onclick = () => {
   S.result.toBlob(async blob => {
     const file = new File([blob], `修圖達人-${Date.now()}.jpg`, { type: 'image/jpeg' });
     try {
-      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); S.resultSaved = true; return; }
     } catch (e) { if (e.name === 'AbortError') return; }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    S.resultSaved = true;
     toast('已下載');
   }, 'image/jpeg', 0.95);
 };

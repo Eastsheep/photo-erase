@@ -35,6 +35,8 @@
     <symbol id="i-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0v0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
     <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M2 13h20"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
   </defs>
 </svg>
 
@@ -66,6 +68,12 @@
         <svg><use href="#i-camera"/></svg>拍照
       </label>
     </div>
+    <label class="portrait-card">
+      <input id="portraitInput" type="file" accept="image/*" hidden>
+      <span class="f-ico"><svg><use href="#i-briefcase"/></svg></span>
+      <div><b>職場形象照 <span class="badge">新</span></b><small>上傳一張生活照，AI 換上正裝、專業背景與打光</small></div>
+      <svg class="chev"><use href="#i-chevron"/></svg>
+    </label>
     <ul class="features">
       <li><span class="f-ico"><svg><use href="#i-hand"/></svg></span><div><b>手指圈選</b><small>圈選、塗抹、雙指縮放精修</small></div></li>
       <li><span class="f-ico"><svg><use href="#i-sparkles"/></svg></span><div><b>AI 智慧補圖</b><small id="featureEngine">AI 修圖引擎生成</small></div></li>
@@ -126,6 +134,27 @@
         </label>
         <button id="btnGo" class="btn btn-primary btn-go" disabled><svg><use href="#i-sparkles"/></svg>AI 移除</button>
       </div>
+    </div>
+
+    <div id="portraitPanel" class="panel" hidden>
+      <div class="opt-group"><span class="opt-label">服裝</span>
+        <div class="chips" id="outfitChips">
+          <button class="chip on" data-outfit="suit">深色西裝</button>
+          <button class="chip" data-outfit="shirt">白襯衫</button>
+          <button class="chip" data-outfit="smart">商務休閒</button>
+          <button class="chip" data-outfit="keep">保留原服裝</button>
+        </div>
+      </div>
+      <div class="opt-group"><span class="opt-label">背景</span>
+        <div class="chips" id="bgChips">
+          <button class="chip on" data-bg="grey">淺灰棚拍</button>
+          <button class="chip" data-bg="white">純白</button>
+          <button class="chip" data-bg="office">辦公室虛化</button>
+          <button class="chip" data-bg="navy">深藍</button>
+        </div>
+      </div>
+      <p class="hint-line">AI 會保留你的五官與髮型，只換服裝、背景和打光</p>
+      <button id="btnPortraitGo" class="btn btn-primary btn-go"><svg><use href="#i-sparkles"/></svg>生成形象照</button>
     </div>
 
     <div id="resultPanel" class="panel" hidden>

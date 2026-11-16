@@ -187,3 +187,16 @@ input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;bac
 .u-cell{background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:10px 6px;display:flex;flex-direction:column;align-items:center;gap:3px}
 .u-cell b{font-size:15px}.u-cell span{font-size:12px;color:var(--muted)}
 .u-official .field-hint{display:block;margin-top:8px}
+
+/* 職場形象照 */
+.portrait-card{display:flex;align-items:center;gap:14px;padding:12px 14px;margin-bottom:12px;border-radius:20px;cursor:pointer;
+  background:linear-gradient(135deg,rgba(255,77,109,.14),rgba(255,159,67,.1));border:1px solid rgba(255,159,67,.35);transition:transform .15s}
+.portrait-card:active{transform:scale(.98)}
+.portrait-card>div{flex:1;min-width:0}
+.portrait-card b{display:flex;align-items:center;gap:6px;font-size:15px}
+.portrait-card small{display:block;color:var(--muted);font-size:13px;margin-top:2px;line-height:1.4}
+.portrait-card .chev{color:var(--muted);width:20px;height:20px}
+.badge{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--grad);color:#fff}
+.opt-group{display:flex;flex-direction:column;gap:6px}
+.opt-label{font-size:12px;color:var(--muted);padding-left:2px}
+#portraitPanel .btn-go{flex:none}

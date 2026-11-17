@@ -11,7 +11,7 @@ const store = {
 const S = {
   W: 0, H: 0, base: null, mask: null, result: null, history: [],
   tool: 'lasso', drawing: false, pts: [], last: null,
-  screen: 'home', busy: false, mode: 'erase', // mode：erase（圈選移除）或 portrait（職場形象照）
+  screen: 'home', busy: false, mode: 'erase', // mode：erase（圈選移除）、portrait（職場形象照）或 restore（畫質修復）
   view: { z: 1, tx: 0, ty: 0, fit: 1 },
   pointers: new Map(), pinch: null, dragCompare: false, split: 0.5,
   instruction: '移除圈選範圍內的路人，自然補上背景',
@@ -25,6 +25,10 @@ function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.h
 function vibrate(ms = 10) { try { navigator.vibrate?.(ms); } catch {} }
 
 // ---------- 畫面切換 ----------
+const MODES = ['erase', 'portrait', 'restore'];
+const MODE_TITLE = { portrait: '職場形象照', restore: '畫質修復' };
+const COACH = { edit: '用手指圈出要移除的人或物　·　雙指可縮放', portrait: '選好服裝與背景，按下生成', restore: '選擇要修的問題，按下開始修復　·　雙指可縮放' };
+const HERO_ICON = { erase: '#i-sparkles', portrait: '#i-briefcase', restore: '#i-wand' };
 function showScreen(name) {
   S.screen = name;
   $('#home').hidden = name !== 'home';
@@ -32,12 +36,17 @@ function showScreen(name) {
   $('#brand').hidden = name !== 'home';
   $('#btnBack').hidden = name === 'home';
   $('#barTitle').hidden = name === 'home';
-  $('#barTitle').textContent = name === 'result' ? '完成' : name === 'portrait' ? '職場形象照' : '編輯';
+  $('#barTitle').textContent = name === 'result' ? '完成' : MODE_TITLE[name] || '編輯';
   $('#editPanel').hidden = name !== 'edit';
   $('#portraitPanel').hidden = name !== 'portrait';
-  $('#coach').textContent = name === 'portrait' ? '選好服裝與背景，按下生成' : '用手指圈出要移除的人或物　·　雙指可縮放';
+  $('#restorePanel').hidden = name !== 'restore';
+  $('#coach').textContent = COACH[name] || COACH.edit;
   $('#coach').hidden = name === 'result';
   $('#tagAfter').textContent = S.mode === 'portrait' ? '形象照' : '修復後';
+  const full = S.resultFull;
+  $('#resultHint').textContent = full && S.origW
+    ? `原圖 ${S.origW}×${S.origH} → 修復後 ${full.width}×${full.height}　·　拖曳滑桿比對`
+    : '拖曳畫面上的滑桿，比對修圖前後';
   $('#resultPanel').hidden = name !== 'result';
   $('#compare').hidden = $('#tagBefore').hidden = $('#tagAfter').hidden = name !== 'result';
   if (name !== 'home') requestAnimationFrame(fitView);
@@ -49,7 +58,7 @@ const UNSAVED_MSG = '修好的照片還沒儲存，離開後就找不回來了�
 $('#btnBack').onclick = () => {
   if (S.busy) return;
   if (hasUnsaved() && !confirm(UNSAVED_MSG)) return;
-  S.result = null; S.baseDirty = false; showScreen('home');
+  S.result = S.resultFull = null; S.baseDirty = false; showScreen('home');
 };
 window.addEventListener('beforeunload', e => { if (hasUnsaved() || S.busy) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -64,10 +73,11 @@ function onFile(e) {
     S.W = Math.round(img.naturalWidth * k); S.H = Math.round(img.naturalHeight * k);
     S.base = canvas(); S.base.getContext('2d').drawImage(img, 0, 0, S.W, S.H);
     URL.revokeObjectURL(url);
-    resetMask(); S.result = null; S.baseDirty = false; S.resultSaved = false;
+    S.origW = img.naturalWidth; S.origH = img.naturalHeight;
+    resetMask(); S.result = S.resultFull = null; S.baseDirty = false; S.resultSaved = false;
     view.width = S.W; view.height = S.H;
     $('#coach').classList.remove('fade');
-    showScreen(S.mode === 'portrait' ? 'portrait' : 'edit'); render(); updateGo();
+    showScreen(modeScreen()); render(); updateGo();
   };
   img.onerror = () => toast('無法讀取這張圖片');
   img.src = url;
@@ -76,13 +86,13 @@ function onFile(e) {
 $('#fileInput').addEventListener('change', onFile);
 $('#cameraInput').addEventListener('change', onFile);
 
-// 首頁模式：移除路人／職場形象照，兩者同等，相簿與拍照按鈕依目前模式開啟
+// 首頁模式：移除路人／職場形象照／畫質修復，三者同等，相簿與拍照按鈕依目前模式開啟
 function setHomeMode(m) {
-  S.homeMode = m === 'portrait' ? 'portrait' : 'erase';
+  S.homeMode = MODES.includes(m) ? m : 'erase';
   store.set('pe.homeMode', S.homeMode);
   $$('.mode-tab').forEach(t => { const on = t.dataset.mode === S.homeMode; t.classList.toggle('on', on); t.setAttribute('aria-selected', on); });
   $$('#home [data-for]').forEach(el => el.hidden = el.dataset.for !== S.homeMode);
-  $('#heroIco').setAttribute('href', S.homeMode === 'portrait' ? '#i-briefcase' : '#i-sparkles');
+  $('#heroIco').setAttribute('href', HERO_ICON[S.homeMode]);
   $('#cameraInput').setAttribute('capture', S.homeMode === 'portrait' ? 'user' : 'environment'); // 形象照預設前鏡頭
 }
 $$('.mode-tab').forEach(t => t.onclick = () => setHomeMode(t.dataset.mode));
@@ -504,7 +514,7 @@ async function fetchAsDataURL(url) {
   try { const r = await fetch(url); if (r.ok) return await blobToDataURL(await r.blob()); } catch {}
   throw new Error('結果圖片下載失敗（可能被瀏覽器擋下）');
 }
-async function inpaintQwen({ images, prompt, enhanced, negative }, key) {
+async function inpaintQwen({ images, prompt, enhanced, negative, hires }, key) {
   const url = `${QWEN_BASE}/api/v1/services/aigc/multimodal-generation/generation`;
   let r;
   try {
@@ -512,7 +522,7 @@ async function inpaintQwen({ images, prompt, enhanced, negative }, key) {
       model: qwenModel(),
       input: { messages: [{ role: 'user', content: [...images.map(image => ({ image })), { text: prompt }] }] },
       parameters: {
-        n: 1, size: sizeFor(2000 * 2000), watermark: false, prompt_extend: !enhanced,
+        n: 1, size: sizeFor(hires ? 2048 * 2048 : 2000 * 2000), watermark: false, prompt_extend: !enhanced,
         negative_prompt: negative || '紅色遮罩，紅色色塊，殘影，輪廓痕跡，文字，浮水印，畫面變形',
       },
     }) });
@@ -527,20 +537,23 @@ async function inpaintQwen({ images, prompt, enhanced, negative }, key) {
   return { image: out.startsWith('data:') ? out : await fetchAsDataURL(out) };
 }
 
-async function inpaintGoogle({ images, prompt }, key) {
+async function inpaintGoogle({ images, prompt, hires }, key) {
   const model = googleModel();
   const b64 = u => u.split(',')[1];
   const aspect = nearestAspect();
-  const size = model.includes('lite') ? '1K' : '2K';
+  // 畫質修復要求最高解析度 4K；Lite 只有 1K
+  const size = model.includes('lite') ? '1K' : hires ? '4K' : '2K';
   // 優先使用新版 Interactions API
-  let res = await googleCall('/v1beta/interactions', key, {
+  const interact = image_size => googleCall('/v1beta/interactions', key, {
     model,
     input: [
       { type: 'text', text: prompt },
       ...images.map(u => ({ type: 'image', mime_type: 'image/jpeg', data: b64(u) })),
     ],
-    response_format: { type: 'image', mime_type: 'image/jpeg', aspect_ratio: aspect, image_size: size },
+    response_format: { type: 'image', mime_type: 'image/jpeg', aspect_ratio: aspect, image_size },
   });
+  let res = await interact(size);
+  if (!res.ok && res.status === 400 && size === '4K') res = await interact('2K'); // 模型不支援 4K 時降為 2K
   // 不支援時退回 generateContent
   if (!res.ok && [400, 404].includes(res.status)) {
     const fb = await googleCall(`/v1beta/models/${model}:generateContent`, key, {
@@ -695,20 +708,96 @@ $('#btnPortraitGo').onclick = async () => {
   } finally { setBusy(false); }
 };
 
+// ---------- 畫質修復：去模糊、去雜訊、放大銳化、老照片修復 ----------
+const FIXES = {
+  auto: '先判斷這張照片的主要畫質問題（模糊、失焦、手震、雜訊、壓縮破圖、解析度太低、褪色或刮痕），再針對性修復',
+  deblur: '修正失焦、手震與動態模糊，讓主體輪廓、五官、文字與紋理恢復銳利清楚',
+  upscale: '把低解析度的小圖放大成高解析度，重建細節（頭髮、皮膚紋理、布料、葉片、文字邊緣），去除放大後的鋸齒與馬賽克感',
+  old: '修復老照片：去除刮痕、摺痕、污點、黴斑與破損，修正褪色與泛黃，恢復正確的對比與層次，臉部清晰自然',
+  colorize: '修復這張黑白（或單色）老照片並自然上色：依照年代與場景推測合理的膚色、衣服、環境顏色，色彩寫實不浮誇，同時去除刮痕與雜訊、提升清晰度',
+  denoise: '去除夜拍、高 ISO 產生的雜訊顆粒與 JPEG 壓縮破圖，同時保留真實細節與邊緣，不要塗抹成油畫感',
+};
+const LEVELS = {
+  light: '修復強度：輕微。以忠於原圖為最優先，只做必要的清晰化，寧可保守也不要自行添加原圖看不出的細節。',
+  normal: '修復強度：標準。在忠於原圖的前提下，明顯提升清晰度與細節。',
+  strong: '修復強度：強力。盡可能重建清晰的細節與質感，但仍不得改變人物長相、物件與構圖。',
+};
+const R = { fix: 'auto', level: 'normal' };
+function restorePrompt(extra = '') {
+  const color = R.fix === 'colorize' ? '' : '\n色彩：保持原本的色彩與白平衡（黑白照片維持黑白），只修正明顯的褪色或偏色。';
+  return `請提升這張照片的畫質，輸出同一張照片的高畫質、高解析度版本。
+修復內容：${FIXES[R.fix]}。
+${LEVELS[R.level]}
+最重要：必須是同一張照片。構圖、取景範圍、長寬比、人物的臉型五官與表情、姿勢、服裝、物件位置、文字內容都要完全保持不變；不要換臉、不要美顏、不要新增或刪除任何物件、不要改變背景。${color}
+畫質：寫實照片質感，邊緣銳利但不過度銳化（不要白邊光暈），保留自然的皮膚紋理與材質，不要出現塑膠感或油畫感。不得出現文字、浮水印或相框。${extra ? `
+使用者的額外要求（優先照做，但仍須保持同一張照片的內容與人物長相）：${extra}` : ''}`;
+}
+$$('#fixChips .chip').forEach(c => c.onclick = () => {
+  $$('#fixChips .chip').forEach(x => x.classList.toggle('on', x === c)); R.fix = c.dataset.fix;
+});
+$$('#levelChips .chip').forEach(c => c.onclick = () => {
+  $$('#levelChips .chip').forEach(x => x.classList.toggle('on', x === c)); R.level = c.dataset.level;
+});
+$('#restoreExtra').value = store.get('pe.restoreExtra');
+
+const OUT_MAX = 4096; // 儲存的最高解析度（長邊）
+// 依原圖長寬比，把生成結果置中裁切成 w×h
+function coverTo(img, w, h) {
+  const out = canvas(w, h); const k = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+  const dw = img.naturalWidth * k, dh = img.naturalHeight * k;
+  const o = out.getContext('2d'); o.imageSmoothingQuality = 'high';
+  o.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  return out;
+}
+// 結果比目前底圖大時，把底圖等比放大到同尺寸（對比時才看得出差別）
+function growBase(w, h) {
+  if (w <= S.W && h <= S.H) return;
+  const nb = canvas(w, h); const c = nb.getContext('2d'); c.imageSmoothingQuality = 'high'; c.drawImage(S.base, 0, 0, w, h);
+  S.W = w; S.H = h; S.base = nb; resetMask(); view.width = w; view.height = h;
+}
+
+$('#btnRestoreGo').onclick = async () => {
+  if (!genKey()) { toast(`請先填入 ${keyLabel()}`); return openSettings(); }
+  try {
+    setBusy(true, 2, 'AI 正在修復畫質', `${engineName()} 生成中，約 15–60 秒`);
+    const extra = $('#restoreExtra').value.trim(); store.set('pe.restoreExtra', extra);
+    const prompt = restorePrompt(extra);
+    const res = await runEngine({
+      images: [S.base.toDataURL('image/jpeg', 0.95)], prompt, enhanced: true, hires: true,
+      negative: '換臉，五官改變，構圖改變，新增物件，過度銳化，白邊光暈，塑膠皮膚，油畫感，卡通，文字，浮水印',
+    });
+    const img = await loadImage(res.image);
+    // 輸出尺寸：維持原圖長寬比，取生成結果的解析度（不小於目前底圖），長邊最多 OUT_MAX
+    const a = S.W / S.H;
+    const long = Math.min(OUT_MAX, Math.max(img.naturalWidth, img.naturalHeight, S.W, S.H));
+    const ow = Math.round(a >= 1 ? long : long * a), oh = Math.round(a >= 1 ? long / a : long);
+    S.resultFull = coverTo(img, ow, oh);
+    // 畫面上的工作畫布不超過 MAX_SIDE，儲存時用完整解析度
+    const k = Math.min(1, MAX_SIDE / Math.max(ow, oh));
+    growBase(Math.round(ow * k), Math.round(oh * k));
+    S.result = k === 1 ? S.resultFull : coverTo(img, S.W, S.H);
+    S.resultSaved = false; S.split = 0.5;
+    $('#promptUsed').textContent = prompt;
+    showScreen('result'); render(); vibrate(20);
+  } catch (err) {
+    toast('失敗：' + err.message, 6000);
+  } finally { setBusy(false); }
+};
+
 // ---------- 結果 ----------
-const modeScreen = () => S.mode === 'portrait' ? 'portrait' : 'edit';
+const modeScreen = () => S.mode === 'portrait' ? 'portrait' : S.mode === 'restore' ? 'restore' : 'edit';
 $('#btnDiscard').onclick = () => {
   if (!S.resultSaved && !confirm('這次的結果還沒儲存，確定要放棄並重來嗎？')) return;
-  S.result = null; showScreen(modeScreen()); render();
+  S.result = S.resultFull = null; showScreen(modeScreen()); render();
 };
 // 繼續修：以結果為新底圖，留在原本的功能（形象照仍是形象照，移除路人仍是移除路人）
 $('#btnKeep').onclick = () => {
   S.baseDirty = !S.resultSaved;
-  S.base = S.result; S.result = null; resetMask(); showScreen(modeScreen()); render(); updateGo();
-  toast(S.mode === 'portrait' ? '已套用，可以調整服裝、背景或要求再生成一次' : '已套用，可以繼續圈選下一處');
+  S.base = S.result; S.result = S.resultFull = null; resetMask(); showScreen(modeScreen()); render(); updateGo();
+  toast({ portrait: '已套用，可以調整服裝、背景或要求再生成一次', restore: '已套用，可以換個修復項目再修一次' }[S.mode] || '已套用，可以繼續圈選下一處');
 };
 $('#btnSave').onclick = () => {
-  S.result.toBlob(async blob => {
+  (S.resultFull || S.result).toBlob(async blob => {
     const file = new File([blob], `修圖達人-${Date.now()}.jpg`, { type: 'image/jpeg' });
     try {
       if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); S.resultSaved = true; return; }

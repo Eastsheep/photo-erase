@@ -13,8 +13,24 @@
 <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
+<script>
+// 開場 logo 動畫：每次開啟 App 播一次；同一次使用中重新載入（例如自動更新）就略過
+try { if (sessionStorage.getItem('pe.splashShown')) document.documentElement.classList.add('no-splash'); sessionStorage.setItem('pe.splashShown', '1'); } catch (e) {}
+</script>
 </head>
 <body>
+<div id="splash" class="splash" aria-hidden="true">
+  <div class="splash-logo">
+    <svg viewBox="0 0 512 512">
+      <defs><linearGradient id="splashBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff4d6d"/><stop offset="1" stop-color="#ff9f43"/></linearGradient></defs>
+      <rect class="sp-tile" width="512" height="512" rx="112" fill="url(#splashBg)"/>
+      <circle class="sp-ring" cx="240" cy="270" r="120" fill="none" stroke="#fff" stroke-width="20" stroke-dasharray="34 26" stroke-linecap="round"/>
+      <path class="sp-star" d="M240 190c7 48 27 70 76 80-49 10-69 32-76 80-7-48-27-70-76-80 49-10 69-32 76-80z" fill="#fff"/>
+      <path class="sp-star2" d="M364 112c4 26 15 37 41 41-26 4-37 15-41 41-4-26-15-37-41-41 26-4 37-15 41-41z" fill="#fff"/>
+    </svg>
+  </div>
+  <div class="splash-name">修圖達人</div>
+</div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <symbol id="i-lasso" viewBox="0 0 24 24"><path d="M7 22a5 5 0 0 1-2-4"/><path d="M3.3 14A6.8 6.8 0 0 1 2 10c0-4.4 4.5-8 10-8s10 3.6 10 8-4.5 8-10 8a12 12 0 0 1-5-1"/><path d="M5 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></symbol>

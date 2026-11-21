@@ -882,5 +882,15 @@ if ('serviceWorker' in navigator) {
     else toast('有新版本，下次開啟 App 時會套用');
   });
 }
+// 開場動畫：播完就移除；點一下可提前略過
+{
+  const sp = $('#splash');
+  if (sp) {
+    const done = () => sp.remove();
+    sp.addEventListener('animationend', e => { if (e.target === sp) done(); });
+    sp.addEventListener('pointerdown', () => { sp.style.transition = 'opacity .15s'; sp.style.opacity = '0'; setTimeout(done, 150); });
+    setTimeout(done, 2500);
+  }
+}
 showScreen('home');
 updateStatus();
